@@ -69,7 +69,9 @@ export function setLabel(set: Pick<PlaySet, "base" | "naturals" | "twos" | "smal
   const jokers = [set.big > 0 ? (set.big === 1 ? "大王" : `${set.big} 张大王`) : "", set.small > 0 ? (set.small === 1 ? "小王" : `${set.small} 张小王`) : ""].filter(Boolean);
   if (set.base === null) return jokers.join(" ");
   const head = `${set.naturals + set.twos} 张 ${rankLabel(set.base)}`;
-  return jokers.length > 0 ? `${head} 挂${jokers.join("")}` : head;
+  if (jokers.length === 0) return head;
+  const tail = jokers.join("、");
+  return `${head} 挂${/^\d/.test(tail) ? " " : ""}${tail}`;
 }
 
 // ---------------------------------------------------------------------------
