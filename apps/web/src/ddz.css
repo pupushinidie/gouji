@@ -1,0 +1,697 @@
+/*
+ * 斗地主牌桌皮肤，叠在 app-pixel.css 的夜色像素皮肤之上（白天版由 day-theme.ts 生成）。
+ *
+ * 布局：顶栏一行；左边是牌桌，右边（宽屏 ≥1280）是状态、记牌器、分数和「动作记录 / 聊天」。
+ * 牌桌是一个网格：最上面一行底牌和倍数；中间左右两栏是上家（左）、下家（右）的名牌和明牌，
+ * 两人出的牌在中间；再下面是自己出的牌或操作按钮；最下面自己的名牌和手牌。
+ * 牌是 41×57 的像素图，只按整数倍放大：手牌 --hs 倍、桌上的牌 --ps 倍（GameBoard 用 pickLayout 算）。
+ */
+
+.dz-screen img { image-rendering: pixelated; }
+
+.dz-panel, .dz-plate, .dz-summary, .dz-final, .dz-banner, .dz-auto-banner, .dz-chip, .dz-top > div, .dz-bubble, .dz-pass, .dz-tracker span {
+  box-shadow:
+    0 calc(var(--px) * -1) 0 0 var(--edge),
+    0 var(--px) 0 0 var(--edge),
+    calc(var(--px) * -1) 0 0 0 var(--edge),
+    var(--px) 0 0 0 var(--edge),
+    inset var(--px) var(--px) 0 0 var(--rim),
+    inset calc(var(--px) * -1) calc(var(--px) * -1) 0 0 var(--shade);
+}
+
+/* ---------- 牌 ---------- */
+.dz-card { position: relative; display: inline-block; flex: 0 0 auto; line-height: 0; vertical-align: bottom; }
+.dz-card img { display: block; width: 100%; height: 100%; image-rendering: pixelated; pointer-events: none; }
+.dz-card-rows { display: inline-flex; flex-direction: column; }
+.dz-card-rows.align-center { align-items: center; }
+.dz-card-rows.align-end { align-items: flex-end; }
+.dz-card-row { display: flex; }
+.dz-card-row + .dz-card-row { margin-top: calc(var(--row-lift, 26px) - 100% + 0px); }
+.dz-card-rows .dz-card-row + .dz-card-row { margin-top: calc(var(--row-lift, 26px) * -1); }
+
+/* ---------- 整屏 ---------- */
+.app-shell.dz-game { width: 100%; max-width: none; min-height: 0; margin: 0; padding: 0; }
+.dz-screen { display: flex; height: 100vh; height: 100dvh; flex-direction: column; gap: 10px; padding: 0 12px 12px; box-sizing: border-box; overflow: hidden; }
+.dz-topbar { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 14px; height: 52px; padding: 0 2px; border-bottom: var(--px) solid var(--rim); white-space: nowrap; }
+.dz-topbar .brand { flex: 0 0 auto; }
+.dz-round { display: flex; flex: 1; align-items: center; justify-content: center; gap: 16px; min-width: 0; overflow: hidden; color: var(--muted); font-size: 12px; }
+.dz-round b { color: var(--text); font-size: 24px; font-weight: 400; }
+.dz-topbar-right { display: flex; align-items: center; gap: 10px; }
+.dz-topbar-right > * { flex-shrink: 0; }
+.dz-layout { display: grid; flex: 1; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; min-height: 0; }
+
+/* ---------- 牌桌：农家院场景 + 一块木桌 ---------- */
+.dz-table {
+  --side: 216px;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--side) minmax(0, 1fr) var(--side);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "top top top"
+    "left plays right"
+    "left center right"
+    "mine mine mine";
+  gap: 8px 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+  /* 场景按整数倍放大铺满（--scene-size 由 GameBoard 算），上面盖一层罩色让牌更突出 */
+  --veil: rgba(10, 8, 4, 0.42);
+  background: linear-gradient(var(--veil), var(--veil)), var(--scene) center / var(--scene-size, cover) no-repeat, #2d2414;
+  image-rendering: pixelated;
+  box-shadow: 0 0 0 var(--px) var(--edge), inset 0 0 0 calc(var(--px) * 2) #6b4a2a, inset 0 0 0 calc(var(--px) * 4) #24170b;
+}
+.dz-table.shake { animation: dz-shake 420ms steps(6, jump-none); }
+@keyframes dz-shake {
+  0%, 100% { transform: none; }
+  20% { transform: translate(-6px, 3px); }
+  40% { transform: translate(5px, -4px); }
+  60% { transform: translate(-4px, -2px); }
+  80% { transform: translate(3px, 3px); }
+}
+
+/* 上面一行：底牌、倍数、盘数 */
+.dz-top { grid-area: top; display: flex; align-items: stretch; justify-content: center; gap: 12px; min-height: 0; }
+.dz-top > div { --rim: #8a6a3a; --shade: #24170b; display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(30, 20, 10, 0.88); color: #f6ead0; }
+.dz-top small { color: #d8c49a; font-size: 12px; }
+.dz-bottom .dz-card + .dz-card { margin-left: 4px; }
+.dz-bottom.flip .dz-card { animation: dz-flip 520ms steps(6, jump-none) both; }
+@keyframes dz-flip { 0% { transform: scaleX(0.05); filter: brightness(2); } 60% { transform: scaleX(1.08); } 100% { transform: none; } }
+.dz-multi { flex-direction: column; justify-content: center; gap: 0 !important; min-width: 96px; text-align: center; }
+.dz-multi b { color: var(--gold); font-size: 48px; font-weight: 400; line-height: 1; }
+.dz-multi b.bump { animation: dz-bump 600ms steps(6, jump-none); }
+@keyframes dz-bump { 0% { transform: scale(1.8); color: #fff2b8; } 100% { transform: none; } }
+.dz-hand-no b { color: var(--text); font-size: 24px; font-weight: 400; }
+.app-shell .dz-tracker-toggle { display: none; align-self: center; }
+.dz-tracker-pop { position: absolute; z-index: 9; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); }
+
+/* 记牌器：每种牌外面还剩几张 */
+.dz-tracker { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+.dz-tracker span { --rim: #3d5482; --shade: #080c17; display: flex; flex-direction: column; align-items: center; padding: 2px 0; background: #16203a; line-height: 1; }
+.dz-tracker small { color: var(--muted); font-size: 12px; line-height: 1.2; }
+.dz-tracker b { color: var(--text); font-size: 24px; font-weight: 400; line-height: 1; }
+.dz-tracker span.none { opacity: 0.35; }
+.dz-tracker span.all b { color: var(--gold); }
+.dz-tracker-pop .dz-tracker { width: 360px; padding: 8px; background: rgba(14, 20, 36, 0.96); box-shadow: 0 0 0 var(--px) var(--gold); }
+/* 牌桌上的记牌器（窄屏弹出）白天也是深色格子 */
+.dz-tracker-pop .dz-tracker span { --rim: #3d5482; --shade: #080c17; background: #16203a; }
+
+/* ---------- 名牌 ---------- */
+.dz-mid { display: contents; }
+.dz-opp { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: 8px; }
+.dz-opp.r2 { grid-area: left; align-items: flex-start; }
+.dz-opp.r1 { grid-area: right; align-items: flex-end; }
+.dz-plate {
+  --rim: #4b6aa0;
+  --shade: #080c17;
+  position: relative;
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 6px 8px;
+  box-sizing: border-box;
+  width: var(--side);
+  padding: 8px;
+  background: rgba(14, 20, 36, 0.92);
+  font-size: 12px;
+}
+.dz-plate::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--seat); }
+.dz-plate.active { --rim: var(--gold); background: #3a2c10; animation: dz-glow 0.9s steps(2, jump-none) infinite; }
+@keyframes dz-glow { 50% { --rim: #fff2b8; } }
+.dz-avatar-box { position: relative; width: 80px; height: 80px; background: #0b1120; box-shadow: inset 0 0 0 var(--px) #263759; }
+.dz-avatar { display: block; width: 80px; height: 80px; image-rendering: pixelated; }
+.dz-hat { position: absolute; left: 50%; top: -22px; width: 64px; height: 64px; transform: translateX(-50%); image-rendering: pixelated; animation: dz-hat-in 500ms steps(5, jump-end) both; pointer-events: none; }
+@keyframes dz-hat-in { 0% { transform: translate(-50%, -40px); opacity: 0; } 1% { opacity: 1; } 100% { transform: translateX(-50%); } }
+.dz-plate-info { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.dz-plate-info strong { overflow: hidden; color: var(--text); font-size: 24px; font-weight: 400; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
+.dz-plate-score { display: flex; align-items: baseline; gap: 6px; }
+.dz-plate-score b { color: var(--gold); font-size: 24px; font-weight: 400; line-height: 1; }
+.dz-plate-score small { font-size: 12px; }
+.dz-plate-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.dz-plate-tags:empty { display: none; }
+.up { color: var(--ok) !important; }
+.down { color: #ff8a7a !important; }
+.dz-role { padding: 0 4px; font-style: normal; font-size: 12px; }
+.dz-role.landlord { color: #2a1c06; background: var(--gold); }
+.dz-role.farmer { color: #10240f; background: #8ccf6a; }
+.dz-plate.landlord { --rim: #c99a52; }
+.dz-chip { --rim: #3d5482; --shade: #080c17; padding: 0 4px; color: var(--muted); background: #16203a; font-size: 12px; font-style: normal; white-space: nowrap; }
+.dz-chip.ok { color: var(--ok); }
+.dz-chip.warn { color: var(--gold); }
+.dz-chip.bad { color: var(--bad); }
+.dz-count { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
+.dz-count b { color: var(--text); font-size: 48px; font-weight: 400; line-height: 1; }
+.dz-count.alert b { color: #ff6b5e; animation: dz-blink-text 0.7s steps(2, jump-none) infinite; }
+.dz-clock {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  min-width: 40px;
+  padding: 2px 6px;
+  color: #2a1c06;
+  background: var(--gold);
+  box-shadow: 0 0 0 var(--px) var(--edge);
+  font-size: 24px;
+  line-height: 1.2;
+  text-align: center;
+}
+.dz-clock.low { color: #fff; background: var(--bad); animation: dz-blink-bg 0.6s steps(2, jump-none) infinite; }
+@keyframes dz-blink-bg { 50% { filter: brightness(1.4); } }
+@keyframes dz-blink-text { 50% { opacity: 0.45; } }
+.dz-alert {
+  position: absolute;
+  left: 92px;
+  bottom: 12px;
+  padding: 2px 6px;
+  color: #fff;
+  background: #d8323c;
+  box-shadow: 0 0 0 var(--px) var(--edge);
+  font-size: 24px;
+  font-style: normal;
+  line-height: 1.1;
+  animation: dz-blink-bg 0.7s steps(2, jump-none) infinite;
+}
+.dz-plate.p1 .dz-alert { left: auto; right: 92px; }
+
+/* 叫地主、抢地主、加倍时头上的话 */
+.dz-bubble {
+  --rim: #ffffff;
+  --shade: #b8b0a0;
+  position: absolute;
+  z-index: 4;
+  padding: 6px 12px;
+  color: #2a1c06;
+  background: #fff6dc;
+  font-size: 24px;
+  line-height: 1.1;
+  white-space: nowrap;
+  animation: dz-pop 360ms steps(4, jump-end) both;
+  pointer-events: none;
+}
+.dz-bubble.b2 { left: calc(100% + 12px); top: 24px; }
+.dz-bubble.b1 { right: calc(100% + 12px); top: 24px; }
+.dz-bubble.b0 { position: relative; align-self: center; }
+@keyframes dz-pop { 0% { transform: scale(0.4); opacity: 0; } 70% { transform: scale(1.1); opacity: 1; } 100% { transform: none; } }
+
+/* 别人明牌：手牌 1 倍亮在名牌下面 */
+.dz-open-hand { padding: 6px; background: rgba(14, 20, 36, 0.78); box-shadow: 0 0 0 var(--px) var(--edge); }
+
+/* ---------- 出的牌 ---------- */
+.dz-plays { grid-area: plays; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; min-height: 0; align-items: center; }
+.dz-play { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; justify-content: center; }
+.dz-play.r2 { align-items: flex-start; }
+.dz-play.r1 { align-items: flex-end; }
+.dz-play.r0 { align-items: center; }
+.dz-play-cards { display: flex; flex-direction: column; gap: 4px; animation: dz-slide 260ms steps(4, jump-end) both; }
+.dz-play.r2 .dz-play-cards { align-items: flex-start; --from: -60px; }
+.dz-play.r1 .dz-play-cards { align-items: flex-end; --from: 60px; }
+.dz-play.r0 .dz-play-cards { align-items: center; --from: 0; }
+@keyframes dz-slide { 0% { transform: translate(var(--from, 0), 40px); opacity: 0; } 1% { opacity: 1; } 100% { transform: none; } }
+.dz-play-cards.latest .dz-card-rows { filter: drop-shadow(0 0 0 var(--gold)) drop-shadow(var(--px) var(--px) 0 var(--edge)); }
+.dz-play-label { padding: 0 6px; color: #f6ead0; background: rgba(30, 20, 10, 0.85); font-size: 12px; }
+.dz-play-cards:not(.latest) { opacity: 0.88; }
+.dz-pass { --rim: #93a3bd; --shade: #263759; padding: 6px 16px; color: var(--text); background: rgba(14, 20, 36, 0.88); font-size: 24px; animation: dz-pop 300ms steps(4, jump-end) both; }
+
+/* 炸弹、王炸、飞机……的大字和图 */
+.dz-fx {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #fff;
+  font-size: 48px;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  animation: dz-fx-pop 1.6s steps(10, jump-end) both;
+  pointer-events: none;
+}
+.dz-fx b { font-weight: 400; text-shadow: 4px 0 0 var(--edge), -4px 0 0 var(--edge), 0 4px 0 var(--edge), 0 -4px 0 var(--edge), 4px 4px 0 var(--edge); }
+.dz-fx img { image-rendering: pixelated; }
+.dz-fx.bomb b { color: #ff9b2e; font-size: 72px; }
+.dz-fx.rocket b { color: #ff5e5e; font-size: 72px; }
+/* 炸弹：先掉下来（64px 显示 2 倍），再换成爆炸（96px 显示 2 倍） */
+.dz-fx .fx-bomb { position: absolute; left: 50%; top: 50%; width: 128px; height: 128px; margin: -64px 0 0 -64px; animation: dz-bomb-drop 480ms steps(6, jump-end) both; }
+.dz-fx .fx-boom { width: 192px; height: 192px; margin-bottom: -48px; animation: dz-boom 1.1s steps(8, jump-end) 420ms both; }
+@keyframes dz-bomb-drop { 0% { transform: translateY(-140px); opacity: 1; } 85% { transform: none; opacity: 1; } 100% { transform: scale(1.2); opacity: 0; } }
+@keyframes dz-boom { 0% { transform: scale(0.3); opacity: 0; } 1% { opacity: 1; } 40% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+.dz-fx .fx-rocket { width: 128px; height: 128px; margin-bottom: -32px; animation: dz-rocket 1.4s steps(12, jump-end) both; }
+@keyframes dz-rocket { 0% { transform: translateY(160px); } 60% { transform: translateY(-40px); } 100% { transform: translateY(-260px); opacity: 0; } }
+.dz-fx.plane b { color: #7fd0ff; }
+.dz-fx.straight b, .dz-fx.pairs b { color: #a8f07a; font-size: 36px; }
+.dz-fx.alert { top: 30%; color: #ff6b5e; font-size: 36px; text-shadow: 3px 0 0 var(--edge), -3px 0 0 var(--edge), 0 3px 0 var(--edge), 0 -3px 0 var(--edge); }
+.dz-fx img[src=""], .dz-banner img[src=""] { display: none; }
+@keyframes dz-fx-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  12% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+  22% { transform: translate(-50%, -50%) scale(1); }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -70%); }
+}
+
+/* ---------- 自己 ---------- */
+.dz-center { grid-area: center; position: relative; display: flex; min-height: calc(57px * var(--ps, 2) + 22px); flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; }
+.dz-center > .dz-play { width: 100%; }
+.dz-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(14, 20, 36, 0.94);
+  box-shadow: 0 0 0 var(--px) var(--edge), inset 0 0 0 var(--px) var(--gold);
+  white-space: nowrap;
+  animation: dz-pop 240ms steps(3, jump-end) both;
+}
+.app-shell .dz-actions :is(.primary-button, .quiet-button) { width: auto; min-height: 48px; margin: 0; padding: 0 18px; font-size: 24px; }
+.app-shell .dz-actions :is(.primary-button, .quiet-button) small { margin-left: 6px; font-size: 12px; opacity: 0.8; }
+.app-shell .dz-actions .dz-hot { --rim: #ffe9a8; background: #ff9b2e; color: #2a1004; }
+.app-shell .dz-actions .dz-as { padding: 0 12px; }
+.dz-actions-time { min-width: 48px; color: var(--gold); font-size: 24px; text-align: center; }
+.dz-actions-time.low { color: var(--bad); animation: dz-blink-text 0.6s steps(2, jump-none) infinite; }
+.dz-note { padding: 2px 8px; color: var(--gold); background: rgba(14, 20, 36, 0.85); font-size: 12px; }
+.dz-note.bad { color: #ff8a7a; }
+
+.dz-mine { grid-area: mine; display: grid; grid-template-columns: var(--side) minmax(0, 1fr); align-items: end; gap: 12px; min-width: 0; }
+.dz-mine > .dz-plate { align-self: end; }
+.dz-hand { display: flex; min-width: 0; flex-direction: column; align-items: center; padding-top: var(--lift, 24px); touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.dz-hand-row { display: flex; }
+.dz-hand .dz-card { transition: transform 60ms steps(2); }
+.dz-hand.selectable .dz-card { cursor: pointer; }
+.dz-hand.selectable .dz-card:hover img { filter: brightness(1.08); }
+.dz-hand .dz-card.picked { transform: translateY(calc(var(--lift, 24px) * -1)); }
+.dz-hand .dz-card.picked::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 calc(var(--px) * 2) var(--gold); pointer-events: none; }
+.dz-hand .dz-card.fresh { animation: dz-drop 520ms steps(6, jump-end) both; }
+@keyframes dz-drop { 0% { transform: translateY(-80px); opacity: 0; } 1% { opacity: 1; } 100% { transform: none; } }
+.dz-hand.my-turn .dz-hand-row { filter: drop-shadow(0 0 0 rgba(240, 192, 80, 0.6)); }
+
+.dz-banner {
+  --rim: var(--gold);
+  --shade: #6e3a06;
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  top: 40%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 28px;
+  color: #2a1c06;
+  background: var(--gold);
+  font-size: 36px;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  animation: dz-fx-pop 2.2s steps(10, jump-end) both;
+  pointer-events: none;
+}
+.dz-banner.spring { color: #5a0f2a; background: #ffc4d8; font-size: 48px; }
+.dz-banner img { width: 128px; height: 128px; margin: -40px 0; }
+.dz-auto-banner {
+  --rim: var(--gold);
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  color: var(--gold);
+  background: rgba(14, 20, 36, 0.95);
+  font-size: 24px;
+  transform: translateX(-50%);
+}
+.app-shell .dz-auto-banner .primary-button { min-height: 40px; margin: 0; }
+
+/* ---------- 右边 ---------- */
+.dz-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.dz-panel { --rim: #3d5482; --shade: #080c17; background: var(--panel); }
+.dz-status { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; }
+.dz-status h2 { margin: 0; color: var(--gold); font-size: 24px; font-weight: 400; line-height: 1.25; }
+.dz-status p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.dz-timer { align-self: flex-start; color: var(--text); font-size: 48px; line-height: 1; }
+.dz-timer.low { color: var(--bad); animation: dz-blink-text 0.6s steps(2, jump-none) infinite; }
+.app-shell .dz-auto-toggle { position: absolute; right: 12px; bottom: 12px; }
+.dz-feedback { color: var(--ok) !important; }
+.dz-feedback.error { color: var(--bad) !important; }
+.dz-tracker-panel { padding: 10px 12px; }
+.dz-tracker-panel h3 { margin: 0 0 8px; color: var(--text); font-size: 12px; font-weight: 400; }
+.dz-tracker-panel h3 small { margin-left: 6px; color: var(--muted); }
+.dz-scores { display: grid; gap: 4px; padding: 10px 14px; }
+.dz-scores div { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.dz-scores i { width: 8px; height: 8px; }
+.dz-scores span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dz-scores b { font-size: 24px; font-weight: 400; line-height: 1.1; }
+.dz-scores .mine span { color: var(--gold); }
+.dz-tabs { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.dz-tab-bar { display: flex; border-bottom: var(--px) solid #263759; }
+.dz-tab-bar button { flex: 1; padding: 10px 0; border: 0; color: var(--muted); background: none; font: inherit; cursor: pointer; }
+.dz-tab-bar button.active { color: var(--gold); box-shadow: inset 0 calc(var(--px) * -2) 0 var(--gold); }
+.dz-tab-bar em { margin-left: 6px; padding: 0 4px; color: #2a1c06; background: var(--gold); font-style: normal; }
+.dz-log { flex: 1; min-height: 0; margin: 0; padding: 10px 14px; overflow-y: auto; list-style: none; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.dz-log li:first-child { color: var(--text); }
+.dz-chat { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.dz-chat > * { flex: 1; min-height: 0; }
+
+/* ---------- 结算、终局弹窗 ---------- */
+.app-shell .gm-panel.dz-summary { width: min(900px, 100%); max-height: calc(100dvh - 40px); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; overflow-y: auto; }
+.dz-summary header, .dz-summary footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dz-summary h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin: 0 !important; }
+.dz-summary h2 small { color: var(--muted); font-size: 12px; }
+.dz-summary.landlord-won h2 { color: var(--gold); }
+.dz-summary.farmers-won h2 { color: var(--ok); }
+.dz-summary.won h2 { color: var(--gold); }
+.dz-summary.lost h2 { color: var(--muted); }
+.dz-sum-multi { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 18px; padding: 8px 12px; background: var(--panel-2); font-size: 12px; color: var(--muted); }
+.dz-sum-multi b { color: var(--text); font-size: 24px; font-weight: 400; }
+.dz-sum-multi .total b { color: var(--gold); }
+.dz-sum-players { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.dz-sum-players li { display: grid; grid-template-columns: 150px minmax(0, 1fr) 80px 72px; align-items: center; gap: 10px; padding: 6px 10px; background: var(--panel-2); }
+.dz-sum-players li.mine { box-shadow: inset 0 0 0 var(--px) var(--gold); }
+.dz-sum-who { display: flex; flex-direction: column; min-width: 0; }
+.dz-sum-who strong { font-size: 24px; font-weight: 400; }
+.dz-sum-who small { color: var(--muted); font-size: 12px; }
+.dz-sum-cards { min-width: 0; overflow: hidden; }
+.dz-sum-cards em { color: var(--gold); font-size: 12px; font-style: normal; }
+.dz-sum-players b { font-size: 24px; font-weight: 400; text-align: right; }
+.dz-sum-total { color: var(--muted); font-size: 24px; text-align: right; }
+.dz-sum-bottom { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.dz-sum-bottom small { color: var(--muted); font-size: 12px; }
+.dz-muted { color: var(--muted); font-size: 12px; }
+.app-shell .gm-panel.dz-final { width: min(520px, 100%); display: flex; flex-direction: column; gap: 12px; }
+.dz-standings { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.dz-standings li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto 80px; align-items: center; gap: 10px; padding: 8px 10px; background: var(--panel-2); }
+.dz-standings li.winner { box-shadow: inset 0 0 0 var(--px) var(--gold); }
+.dz-rank { color: var(--gold); font-size: 24px; }
+.dz-standings strong { font-size: 24px; font-weight: 400; }
+.dz-standings small { color: var(--muted); }
+.dz-standings b { font-size: 24px; font-weight: 400; text-align: right; }
+.dz-rematch { display: flex; flex-direction: column; gap: 8px; }
+.dz-screen small, .dz-summary small, .dz-final small { font-size: 12px; }
+.app-shell .dz-summary footer .primary-button { width: auto; min-width: 220px; min-height: 48px; margin: 0; padding: 0 24px; font-size: 24px; }
+.app-shell .dz-summary footer .primary-button small { margin-left: 8px; }
+.dz-summary footer .dz-muted { white-space: nowrap; }
+.app-shell .dz-final .gm-panel-actions :is(.primary-button, .quiet-button) { flex: 1 1 0; width: auto; min-height: 48px; margin: 0; padding: 0 16px; font-size: 24px; white-space: nowrap; }
+.app-shell .dz-final > .quiet-button { align-self: flex-start; }
+
+/* ---------- 窄屏：右边栏收起，状态挪到牌桌右上角 ---------- */
+.app-shell .dz-drawer-toggle { display: none; }
+.dz-status-mini { display: none; }
+@media (max-width: 1279px) {
+  .dz-layout { grid-template-columns: minmax(0, 1fr); }
+  .dz-side { display: none; }
+  .app-shell .dz-drawer-toggle { display: inline-flex; }
+  .app-shell .dz-tracker-toggle { display: inline-flex; }
+  .dz-layout.drawer-open .dz-side {
+    position: fixed;
+    z-index: 30;
+    top: 64px;
+    right: 12px;
+    bottom: 12px;
+    display: flex;
+    width: min(320px, calc(100vw - 24px));
+    padding: 8px;
+    background: var(--bg);
+    box-shadow: 0 0 0 var(--px) var(--gold);
+  }
+  .dz-status-mini {
+    position: absolute;
+    z-index: 4;
+    top: 10px;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    max-width: 260px;
+    padding: 6px 10px;
+    background: rgba(14, 20, 36, 0.9);
+    box-shadow: 0 0 0 var(--px) var(--edge);
+    text-align: right;
+  }
+  .dz-status-mini strong { color: var(--gold); font-size: 24px; font-weight: 400; line-height: 1.1; }
+  .dz-status-mini b { color: var(--text); font-size: 24px; font-weight: 400; line-height: 1; }
+  .dz-status-mini b.low { color: var(--bad); }
+  .dz-status-mini small { color: var(--ok); font-size: 12px; }
+  .dz-status-mini small.error { color: var(--bad); }
+  .dz-top { justify-content: flex-start; }
+}
+/* 矮一点的桌面（1024×690）：名牌收紧 */
+@media (min-width: 640px) and (max-height: 760px) {
+  .dz-plate { grid-template-columns: 64px minmax(0, 1fr); padding: 6px; }
+  .dz-avatar-box, .dz-avatar { width: 64px; height: 64px; }
+  .dz-hat { top: -18px; width: 64px; height: 64px; }
+  .dz-count b { font-size: 36px; }
+  .dz-alert { left: 76px; }
+  .dz-plate.p1 .dz-alert { right: 76px; }
+}
+
+/* ---------- 首页：一屏放下 ----------
+ * 桌面端：左边标题、介绍、主图（512px 原尺寸）和摆出来的一手牌，右边「进入牌桌」和在线牌桌。
+ */
+.app-shell .dz-hero {
+  position: relative;
+  width: 512px;
+  height: 288px;
+  margin-top: 16px;
+  background: #2d2414 center / 512px 288px no-repeat;
+  image-rendering: pixelated;
+  box-shadow: 0 0 0 var(--px) var(--edge), 0 0 0 calc(var(--px) * 2) var(--rim), 0 0 0 calc(var(--px) * 3) var(--edge);
+}
+.app-shell .dz-showcase { position: absolute; left: 50%; bottom: 14px; display: flex; transform: translateX(-50%); }
+.app-shell .dz-showcase .dz-card { filter: drop-shadow(var(--px) var(--px) 0 var(--edge)); transform: translateY(calc((var(--i) - 3) * (var(--i) - 3) * 2px)) rotate(calc((var(--i) - 3) * 4deg)); }
+.app-shell .dz-showcase .dz-card + .dz-card { margin-left: -46px; }
+.dz-home-points { display: grid; gap: 6px; margin: 16px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 12px; }
+.dz-home-points b { display: inline-block; min-width: 48px; margin-right: 8px; color: var(--gold); font-size: 24px; font-weight: 400; vertical-align: middle; }
+.app-shell .capacity-options.dz-hands-pick { grid-template-columns: repeat(4, 1fr); }
+.app-shell .capacity-options.dz-hands-pick .capacity-option { height: 48px; font-size: 24px; }
+
+.app-shell.dz-home { width: min(1200px, calc(100% - 48px)); }
+.dz-home .welcome-grid { grid-template-columns: minmax(512px, 1fr) 420px; grid-template-rows: minmax(0, 1fr); align-items: center; gap: 48px; padding: 24px 0; }
+.dz-home .welcome-copy { padding: 0; }
+.dz-home-side { display: flex; max-height: 100%; min-width: 0; min-height: 0; flex-direction: column; gap: 16px; }
+.dz-home-side .entry-card { flex: 0 0 auto; }
+.app-shell.dz-home .online-rooms { display: flex; min-height: 0; flex: 0 1 auto; flex-direction: column; margin: 0; padding: 0; border-top: 0; }
+.app-shell.dz-home .online-rooms > * { flex: 0 0 auto; }
+.app-shell.dz-home .online-rooms-heading { margin-bottom: 8px; }
+.app-shell.dz-home .online-rooms-heading h2 { margin-top: 2px; }
+.app-shell.dz-home .online-rooms .online-rooms-grid { flex: 0 1 auto; min-height: 56px; grid-template-columns: 1fr; overflow-y: auto; }
+.app-shell.dz-home .entry-card .primary-button { min-height: 56px; font-size: 24px; }
+@media (min-width: 900px) {
+  .app-shell.dz-home { height: 100vh; height: 100dvh; min-height: 0; }
+  .dz-home .topbar { flex: 0 0 auto; height: 64px; }
+  .dz-home .welcome-grid { flex: 1 1 auto; min-height: 0; }
+}
+@media (min-width: 900px) and (max-height: 820px) {
+  .app-shell.dz-home .welcome-copy h1 { margin: 12px 0; font-size: 48px; }
+  .app-shell.dz-home .entry-card { padding-top: 16px; padding-bottom: 20px; }
+  .app-shell.dz-home :is(.section-kicker, .step-indicator, .entry-footnote, .online-rooms-note) { display: none; }
+  .app-shell.dz-home .mode-switch { margin-top: 8px; }
+  .app-shell.dz-home .entry-form .field-label-spaced { margin-top: 12px; }
+  .app-shell.dz-home .entry-card .primary-button { margin-top: 14px; }
+  .dz-home .welcome-grid { padding: 12px 0; }
+  .app-shell.dz-home .entry-form .field-hint { display: none; }
+}
+@media (min-width: 900px) and (max-height: 720px) {
+  .dz-home-points { display: none; }
+  .app-shell.dz-home .entry-card-heading { display: none; }
+  .app-shell.dz-home .mode-switch { margin-top: 0; }
+  .app-shell.dz-home .entry-card .primary-button { min-height: 48px; }
+}
+@media (max-width: 899px) {
+  .app-shell.dz-home { width: calc(100% - 32px); }
+  .dz-home .welcome-grid { display: flex; flex-direction: column; align-items: stretch; gap: 20px; padding: 16px 0 32px; }
+  .dz-home .welcome-copy { display: contents; }
+  .dz-home .welcome-copy > * { order: 1; }
+  .dz-home .dz-home-side { display: contents; }
+  .dz-home .entry-card { order: 2; }
+  .app-shell.dz-home .dz-hero { order: 3; width: 100%; max-width: 512px; margin: 0 auto; background-size: cover; }
+  .dz-home-points { order: 4; }
+  .dz-home .online-rooms { order: 5; }
+  .app-shell.dz-home .welcome-copy h1 { margin: 0; }
+  .app-shell.dz-home :is(.eyebrow, .section-kicker, .step-indicator, .entry-footnote) { display: none; }
+  .app-shell.dz-home .entry-card { padding: 16px; }
+  .dz-home .topbar { height: 56px; }
+  .app-shell.dz-home .mode-switch { margin-top: 8px; }
+}
+@media (max-width: 559px) {
+  .app-shell.dz-home .dz-hero { height: 220px; }
+  .app-shell .dz-showcase .dz-card { width: 41px !important; height: 57px !important; }
+  .app-shell .dz-showcase .dz-card img { width: 41px; height: 57px; }
+  .app-shell .dz-showcase .dz-card + .dz-card { margin-left: -16px; }
+}
+
+/* ---------- 等候房间：一屏放下 ---------- */
+.app-shell.dz-room { width: min(1440px, calc(100% - 48px)); }
+.dz-room .room-layout { display: flex; width: 100%; min-height: 0; flex-direction: column; padding: 24px 0 16px; }
+.dz-room .room-heading { margin-bottom: 20px; }
+.dz-room .room-heading h1 { margin-top: 8px; }
+.dz-room .room-grid { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.dz-room .player-details strong { font-size: 24px; line-height: 1.25; }
+.dz-room .open-seat .player-details strong { color: var(--muted); font-size: 12px; }
+.dz-room .player-row { min-height: 56px; }
+.dz-room :is(.player-avatar, .empty-avatar) { width: 44px; height: 44px; flex-basis: 44px; font-size: 24px; }
+.dz-member-avatar { position: relative; overflow: hidden; }
+.dz-member-avatar img { position: absolute; inset: 2px; width: 40px; height: 40px; }
+.dz-member-avatar img + span { display: none; }
+.app-shell.dz-room .room-actions .primary-button { min-height: 56px; font-size: 24px; }
+.dz-room-chat { display: flex; min-height: 0; align-self: stretch; }
+.app-shell.dz-room .room-chat { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; margin: 0; }
+.app-shell.dz-room .room-chat-list { flex: 1 1 auto; height: auto; min-height: 120px; }
+.dz-room .room-feedback { margin: 12px 0 0; }
+.dz-room .room-secure-note { display: none; }
+.dz-options { margin-top: 16px; }
+.dz-option-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 8px; }
+.dz-option-row > span { color: var(--muted); font-size: 12px; }
+.dz-option-values { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (min-width: 760px) {
+  .app-shell.dz-room { height: 100vh; height: 100dvh; min-height: 0; }
+  .dz-room .topbar { flex: 0 0 auto; height: 64px; }
+  .dz-room .room-layout { flex: 1 1 auto; }
+  .dz-room .room-grid { flex: 1 1 auto; min-height: 0; }
+  .dz-room .room-code-panel, .dz-room .player-panel { max-height: 100%; overflow-y: auto; }
+}
+@media (min-width: 760px) and (max-height: 820px) {
+  .dz-room .room-layout { padding-top: 16px; }
+  .dz-room .room-heading { margin-bottom: 14px; }
+  .dz-room .room-heading p { display: none; }
+  .dz-room .player-panel .field-hint { margin: 8px 0; }
+  .dz-room .player-row { min-height: 50px; }
+  .app-shell.dz-room .room-actions .primary-button { margin-top: 6px; }
+}
+@media (min-width: 760px) and (max-width: 1180px) {
+  .dz-room .room-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); align-items: stretch; }
+  .dz-room .room-code-panel { grid-column: 1; grid-row: 1 / 3; min-height: 0; overflow-y: auto; }
+  .dz-room .player-panel { grid-column: 2; grid-row: 1; }
+  .dz-room .dz-room-chat { grid-column: 2; grid-row: 2; }
+}
+@media (max-width: 759px) {
+  .app-shell.dz-room { width: calc(100% - 32px); }
+  .dz-room .room-layout { padding-top: 16px; }
+  .dz-room .room-grid { display: flex; flex-direction: column; align-items: stretch; }
+  .app-shell.dz-room .room-chat-list { height: 210px; flex: 0 0 auto; }
+  .dz-room .room-heading { margin-bottom: 12px; }
+  .dz-room .room-heading p { display: none; }
+  .dz-room .player-panel { display: flex; flex-direction: column; }
+  .dz-room .player-panel > .field-hint { order: 3; }
+  .dz-room .player-row { min-height: 48px; }
+  /* 「开始对局」要在第一屏：房间码一栏（含开房选项）放到玩家后面 */
+  .dz-room .room-code-panel { order: 2; }
+  .dz-room .player-panel { order: 1; }
+  .dz-room .dz-room-chat { order: 3; }
+}
+
+/* ---------- 规则弹窗 ---------- */
+.app-shell .gm-panel.dz-rules { --rim: var(--gold-2); width: min(760px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; text-align: left; }
+.dz-rules .game-rules-block + .game-rules-block { margin-top: 12px; }
+.app-shell .dz-rules .game-rules-block h3 { margin: 0 0 4px; color: var(--gold); font-family: inherit; font-size: 12px; font-weight: 400; }
+.app-shell .dz-rules .game-rules-block :is(p, li) { margin: 0; color: var(--text); font-size: 12px; line-height: 1.7; }
+.app-shell .dz-rules .game-rules-block :is(ul, ol) { margin: 0; padding-left: 20px; }
+.app-shell .dz-rules .game-rules-block b { color: var(--gold); font-weight: 400; }
+.dz-rules-examples { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; }
+.dz-rules-examples > span { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.dz-rules-examples small { color: var(--muted); font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dz-fx, .dz-fx img, .dz-banner, .dz-plate.active, .dz-hand .dz-card.fresh, .dz-bottom.flip .dz-card, .dz-table.shake, .dz-multi b.bump,
+  .dz-play-cards, .dz-pass, .dz-bubble, .dz-actions, .dz-hat, .dz-clock.low, .dz-alert, .dz-count.alert b { animation: none; }
+}
+
+/* ---------- 手机 ---------- */
+.app-shell .dz-menu-toggle { display: none; }
+.dz-screen.mobile { padding: 0 8px 8px; gap: 6px; }
+.dz-screen.mobile .dz-topbar { position: relative; height: 48px; gap: 8px; }
+.dz-screen.mobile .dz-topbar .brand-name span { display: none; }
+.dz-screen.mobile .dz-round { gap: 8px; }
+.dz-screen.mobile .dz-round > span:first-child { display: none; }
+.app-shell .dz-screen.mobile .dz-menu-toggle { display: inline-flex; order: 3; }
+.dz-screen.mobile .dz-topbar-right { display: none; }
+.dz-screen.mobile .dz-topbar-right.open {
+  position: absolute;
+  z-index: 40;
+  top: 52px;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px;
+  background: var(--panel);
+  box-shadow: 0 0 0 var(--px) var(--gold);
+}
+.dz-table.mobile {
+  --side: auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(80px, 1fr) auto auto auto;
+  grid-template-areas:
+    "left right"
+    "top top"
+    "plays plays"
+    "center center"
+    "status status"
+    "mine mine";
+  gap: 6px;
+  padding: 6px;
+  box-shadow: 0 0 0 var(--px) var(--edge);
+}
+.dz-table.mobile .dz-plate { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-rows: auto; align-items: center; width: 100%; padding: 4px 6px; }
+.dz-table.mobile .dz-avatar-box, .dz-table.mobile .dz-avatar { width: 40px; height: 40px; }
+.dz-table.mobile .dz-hat { top: -10px; width: 32px; height: 32px; }
+.dz-table.mobile .dz-plate-info { gap: 2px; }
+.dz-table.mobile .dz-plate-info strong { font-size: 12px; }
+.dz-table.mobile .dz-plate-tags .dz-chip:not(.bad) { display: none; }
+.dz-table.mobile .dz-count { grid-column: auto; gap: 4px; }
+.dz-table.mobile .dz-count .dz-card { display: none; }
+.dz-table.mobile .dz-count b { font-size: 36px; }
+.dz-table.mobile .dz-clock { right: auto; left: 4px; bottom: auto; top: -10px; min-width: 32px; }
+.dz-table.mobile .dz-alert { left: auto; right: 4px; bottom: -14px; font-size: 12px; }
+.dz-table.mobile .dz-plate.p1 .dz-alert { right: 4px; }
+.dz-table.mobile .dz-bubble { top: calc(100% + 4px); left: 50%; right: auto; font-size: 12px; transform: translateX(-50%); }
+.dz-table.mobile .dz-bubble.b0 { top: auto; left: auto; transform: none; font-size: 24px; }
+.dz-table.mobile .dz-opp { min-height: auto; align-items: stretch; gap: 4px; }
+.dz-open-text { padding: 2px 6px; color: var(--gold); background: rgba(14, 20, 36, 0.88); box-shadow: 0 0 0 var(--px) var(--edge); font-size: 12px; line-height: 1.5; word-break: break-all; }
+.dz-table.mobile .dz-top { gap: 6px; justify-content: flex-start; }
+.dz-table.mobile .dz-top > div { padding: 4px 6px; }
+.dz-table.mobile .dz-top .dz-hand-no { display: none; }
+.dz-table.mobile .dz-multi { min-width: 64px; }
+.dz-table.mobile .dz-multi b { font-size: 36px; }
+.dz-table.mobile .dz-multi small:last-child { display: none; }
+.dz-table.mobile .dz-tracker-pop { left: 0; transform: none; }
+.dz-table.mobile .dz-tracker-pop .dz-tracker { width: calc(100vw - 40px); }
+.dz-table.mobile .dz-plays { gap: 6px; }
+.dz-table.mobile .dz-fx { font-size: 36px; }
+.dz-table.mobile .dz-fx b { font-size: 36px; }
+.dz-table.mobile .dz-fx .fx-boom { width: 96px; height: 96px; margin-bottom: -24px; }
+.dz-table.mobile .dz-fx :is(.fx-bomb, .fx-rocket) { width: 64px; height: 64px; }
+.dz-table.mobile .dz-fx .fx-bomb { margin: -32px 0 0 -32px; }
+.dz-table.mobile .dz-banner img { width: 64px; height: 64px; margin: -12px 0; }
+.dz-table.mobile .dz-center { min-height: 0; }
+.dz-table.mobile .dz-actions { flex-wrap: wrap; justify-content: center; max-width: 100%; padding: 6px; white-space: normal; gap: 6px; }
+.app-shell .dz-table.mobile .dz-actions :is(.primary-button, .quiet-button) { min-height: 44px; padding: 0 10px; }
+.app-shell .dz-table.mobile .dz-actions :is(.primary-button, .quiet-button) small { display: none; }
+.dz-table.mobile .dz-mine { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.dz-table.mobile .dz-mine > .dz-plate { grid-template-columns: 40px minmax(0, 1fr); }
+.dz-table.mobile .dz-mine > .dz-plate .dz-plate-info { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
+.dz-table.mobile .dz-hand { padding-top: 16px; }
+.dz-table.mobile .dz-status-mini { position: static; grid-area: status; justify-self: center; flex-direction: row; align-items: center; gap: 8px; max-width: 100%; padding: 2px 10px; }
+.dz-table.mobile .dz-status-mini strong { font-size: 12px; }
+.dz-table.mobile .dz-note { display: none; }
+.dz-screen.mobile .dz-summary footer { position: sticky; bottom: -18px; margin: 0 -20px -18px; padding: 10px 20px; background: var(--panel); box-shadow: 0 calc(var(--px) * -1) 0 var(--rim); }
+.dz-screen.mobile .dz-sum-bottom small.dz-muted { display: none; }
+.dz-table.mobile .dz-banner { font-size: 24px; }
+.dz-table.mobile .dz-banner.spring { font-size: 36px; }
+.dz-screen.mobile .dz-summary { position: fixed; inset: 8px; width: auto; }
+.dz-screen.mobile .dz-sum-players li { grid-template-columns: minmax(0, 1fr) auto; }
+.dz-screen.mobile .dz-sum-cards { grid-column: 1 / -1; grid-row: 2; }
+.dz-screen.mobile .dz-sum-total { display: none; }
+@media (max-width: 639px) {
+  .dz-layout.drawer-open .dz-side { top: 60px; }
+  .dz-summary footer { flex-direction: column; align-items: stretch; }
+  .app-shell .dz-summary footer .primary-button { width: 100%; min-width: 0; }
+  .app-shell .dz-final .gm-panel-actions { flex-direction: column; }
+}
