@@ -1,21 +1,68 @@
 export * from "./types.js";
 export * from "./cards.js";
-export { allLeadMoves, beatingMoves, beats, canBeat, classify, COMBO_NAMES, comboKey, comboLabel } from "./combos.js";
-export type { Combo, ComboType, Move } from "./combos.js";
-export { DEFAULT_OPTIONS, ddzConfig, HAND_SIZE, multiplierOf, nextSeat, resolvePlay, stackDeal } from "./ddz.js";
-export { decompose, handStrength, hintMoves } from "./bot.js";
+export {
+  beats,
+  beatingMoves,
+  burnCandidates,
+  canBeat,
+  canBurnTail,
+  cardsBeat,
+  forEachShape,
+  GOUJI_THRESHOLD,
+  hasBurnCandidate,
+  leadMoves,
+  legalBurnLead,
+  parseSet,
+  setLabel,
+  shapeCards,
+} from "./sets.js";
+export type { PlaySet, Shape } from "./sets.js";
+export {
+  activeCount,
+  burnOptions,
+  canBurn,
+  canRang,
+  canRespond,
+  hasHead,
+  isActive,
+  mayBurn,
+  nextActive,
+  nextResponder,
+  nextSeat,
+  oppOf,
+  SEATS,
+  teamOf,
+  teammates,
+} from "./turn.js";
+export {
+  applyGouji,
+  burnLeadDefault,
+  createGouji,
+  DEFAULT_OPTIONS,
+  goujiConfig,
+  HAND_SIZE,
+  needsReturn,
+  REPORT_LIMIT,
+  stackDeal,
+} from "./gouji.js";
 export {
   applyCommand,
+  botBurn,
   botCommand,
+  burnEligibleSeats,
+  burnWindowKey,
   createGame,
   legalCommands,
   pendingSeats,
   redactGameForViewer,
   scoreOf,
+  spectatorView,
   stepSeconds,
+  tickBurnWindow,
   timeoutCommand,
   timeoutTurn,
   timerKey,
+  topKey,
 } from "./engine.js";
 export type { GameOptions, NewPlayer } from "./engine.js";
 export { createRng } from "./rng.js";
@@ -39,3 +86,6 @@ export type {
   VoiceParticipant,
   VoiceSignal,
 } from "./roomTypes.js";
+export { buildDeal, buildState, createScene, previewRoom, resultFrom, SCENE_NAMES } from "./scenes.js";
+export type { CardsSpec, DealSpec, PreviewRoomOptions, ResultSpec, SceneName, StateSpec } from "./scenes.js";
+export { cloneState } from "./gouji.js";

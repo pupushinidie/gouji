@@ -1,8 +1,8 @@
 import type { GameOptions } from "./engine.js";
 import type { GameCommand, GameState } from "./types.js";
 
-/** 斗地主始终 3 个座位；1–3 个真人，空座由机器人补位。 */
-export const SEAT_COUNT = 3;
+/** 够级始终 6 个座位（甲 0、2、4，乙 1、3、5）；1–6 个真人，开局时空座由人机补位。 */
+export const SEAT_COUNT = 6;
 
 export interface LobbyMember {
 	readonly id: string;
@@ -11,6 +11,8 @@ export interface LobbyMember {
 	readonly name: string;
 	readonly isHost: boolean;
 	readonly connected: boolean;
+	/** 选的座位 0–5（选座就是选队：甲 0、2、4，乙 1、3、5）。开局后就是对局里的座位号。 */
+	readonly seat: number;
 }
 
 /** 房主在房间里随时可以改的设置。 */
@@ -115,6 +117,7 @@ export interface PublicRoomSummary {
 		readonly score?: number;
 		readonly isActive?: boolean;
 		readonly isWinner?: boolean;
+		readonly seat?: number;
 	}[];
 }
 
@@ -132,11 +135,15 @@ export interface ClientToServerEvents {
 	"room:rematch": (accept: boolean, ack: RoomAck<void>) => void;
 	"room:kick": (memberId: string, ack: RoomAck<void>) => void;
 	"room:access": (settings: Partial<RoomAccess>, ack: RoomAck<void>) => void;
-	/** 等待中房主修改开房选项（底分、盘数、明牌、加倍……）。 */
+	/** 等待中房主修改开房选项（盘数、进贡、让牌、看牌）。 */
 	"room:options": (options: Partial<GameOptions>, ack: RoomAck<void>) => void;
 	/** 等待中：观战的人坐到空座位上 / 玩家（房主除外）改成观战。 */
 	"room:sit": (ack: RoomAck<void>) => void;
 	"room:stand": (ack: RoomAck<void>) => void;
+	/** 等待中：自己换到一个空座位（选座就是选队）。 */
+	"room:seat": (seat: number, ack: RoomAck<void>) => void;
+	/** 等待中：房主对调两个座位（有人没人都行）。 */
+	"room:swap-seats": (payload: { a: number; b: number }, ack: RoomAck<void>) => void;
 	"room:dissolve": (ack: RoomAck<void>) => void;
 	"admin:verify": (token: string, ack: RoomAck<void>) => void;
 	"admin:dissolve": (payload: { roomId: string; token: string }, ack: RoomAck<void>) => void;
