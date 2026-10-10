@@ -364,9 +364,11 @@ describe("够级房间", () => {
     expect((await send({ type: "AUTO", on: true })).ok).toBe(true);
     await updateWhere(host, (snapshot) => snapshot.game?.players[0]!.auto === true);
     expect((await send({ type: "AUTO", on: false })).ok).toBe(true);
-    // 不合法的操作被拒，带中文说明
+    // 不合法的操作被拒，带中文说明；客户端不能发系统操作（超时、烧牌窗口满）
     const bad = await send({ type: "PLAY", cards: parseCards("8 9") });
     expect(bad.ok).toBe(false);
+    expect((await send({ type: "TIMEOUT" } as never)).ok).toBe(false);
+    expect((await send({ type: "TICK" } as never)).ok).toBe(false);
     await call<void>((ack) => host.emit("room:dissolve", ack));
   }, 30_000);
 

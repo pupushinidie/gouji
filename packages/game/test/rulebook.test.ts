@@ -24,7 +24,7 @@ import {
   timeoutTurn,
   type GameState,
 } from "../src/index.js";
-import { act, burn, pass, passSettled, pick, pid, play, playSettled, runUntil, settle, tick, total } from "./helpers.js";
+import { act, burn, othersNoRevolt, pass, passSettled, pick, pid, play, playSettled, runUntil, settle, tick, total } from "./helpers.js";
 
 const set = (text: string) => parseSet(parseCards(text));
 
@@ -437,11 +437,15 @@ describe("规则书 T15–T18：进贡、抗贡、革命", () => {
   it("规则书#T17 4 没王没 2 宣布革命、其他人不革命：4 不出牌算四科，1 从开局起无头，该 4 先出改由 5 先出；0、2 先后走科 → 4 算三科，甲串三户 +12", () => {
     let state = buildDeal({ noWild: [4], firstLeader: 4, seed: 21 });
     expect(state.stage).toBe("revolution");
-    expect(pendingSeats(state)).toEqual([4]);
-    // 能不能革命只告诉本人
+    // 每盘都有革命阶段、人人都要表态（不暴露谁能革命）；能不能革命只告诉本人
+    expect(pendingSeats(state)).toEqual([0, 1, 2, 3, 4, 5]);
     expect(redactGameForViewer(state, pid(4)).you!.canRevolt).toBe(true);
+    expect(redactGameForViewer(state, pid(0)).you!.canRevolt).toBe(false);
     expect(redactGameForViewer(state, pid(0)).revolution!.eligible).toEqual([]);
+    expect(() => act(state, 0, { type: "REVOLT", revolt: true })).toThrow(/不能革命/);
     state = act(state, 4, { type: "REVOLT", revolt: true });
+    expect(state.stage).toBe("revolution");
+    state = othersNoRevolt(state);
     expect(state.revolutionary).toBe(4);
     expect(state.players[4]!.hand).toEqual([]);
     expect(state.revolutionHand).toHaveLength(36);
@@ -463,11 +467,13 @@ describe("规则书 T15–T18：进贡、抗贡、革命", () => {
     // 有落贡：先把进贡走完（5→0、4→3 都跨队，3 和 0 还贡）
     while (state.stage === "return") state = timeoutTurn(state);
     expect(state.stage).toBe("revolution");
-    expect(pendingSeats(state).sort()).toEqual([1, 4]);
+    expect(redactGameForViewer(state, pid(1)).you!.canRevolt).toBe(true);
+    expect(redactGameForViewer(state, pid(4)).you!.canRevolt).toBe(true);
     const firstLeader = state.firstLeader;
     expect(firstLeader).toBe(5);
     state = act(state, 4, { type: "REVOLT", revolt: true });
     state = act(state, 1, { type: "REVOLT", revolt: true });
+    state = othersNoRevolt(state);
     expect(state.events.find((event) => event.type === "RevolutionRedeal")).toMatchObject({ seats: [1, 4] });
     expect(state.handNo).toBe(2);
     expect(state.redeals).toBe(1);
@@ -475,6 +481,9 @@ describe("规则书 T15–T18：进贡、抗贡、革命", () => {
     expect(state.firstLeader).toBe(firstLeader);
     expect(state.revolutionary).toBeNull();
     expect(total(state)).toBe(216);
+    // 新发的牌照样先过革命阶段，之后 5 先出
+    expect(state.stage).toBe("revolution");
+    state = othersNoRevolt(state);
     if (state.stage === "playing") expect(state.turn).toBe(5);
   });
 });

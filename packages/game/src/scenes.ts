@@ -281,7 +281,9 @@ export function buildState(spec: StateSpec = {}): GoujiState {
     state.turn = spec.turn ?? (top ? nextResponder(state, top.seat) ?? -1 : leader);
   } else {
     state.turn = -1;
-    const order = spec.result?.order ?? [...state.finished, ...SEATS.filter((seat) => !state.finished.includes(seat) && seat !== state.revolutionary)];
+    const rest = SEATS.filter((seat) => !state.finished.includes(seat) && seat !== state.revolutionary);
+    const rebel = state.revolutionary;
+    const order = spec.result?.order ?? (rebel === null ? [...state.finished, ...rest] : [...state.finished.slice(0, 3), rebel, ...state.finished.slice(3), ...rest]);
     const result = resultFrom({ ...spec.result, order, revolutionary: state.revolutionary, burns: state.burnsThisHand }, state.handNo);
     state.result = result;
     state.prevResult = result;
@@ -336,10 +338,10 @@ const BURN_HAND = "A A 7 7 7 9 9 小 大";
 
 /**
  * 按名字造局面。视角默认是座位 0（甲，队友 2、4，对头 3）。
- * - opening：第 1 盘刚发完牌，座位 0 先出（36 张）。
+ * - opening：第 1 盘刚发完牌、过了革命阶段，座位 0 先出（36 张）。
  * - beforeLead / beforeRespond：轮到 0 发牌 / 接 5 出的 8 8。
  * - tribute / tributeWaived / tributeReturn / antiTribute：第 2 盘进贡（规则书 T15、T16：1 选吃不吃 5 的烧贡；免贡后的到账；0 要还 5 两张；4 发到 4 张大王抗贡）。
- * - revolution：座位 0 手里没王没 2，正在选革命；revolutionPlay：4 革命了、1 无头，5 先出。
+ * - revolution：革命阶段（每盘都有），座位 0 手里没王没 2 可以革命，其他人只能选「继续」；revolutionPlay：4 革命了、1 无头，5 先出。
  * - goujiDuel：0 发 K K，3（对头）已经可以接；goujiWait：同样但窗口没满 2 秒。
  * - burnWindow：1 发 K K，0 能烧（剧本 B），窗口没满 2 秒；burnState：0 烧成、正在烧牌状态下发牌；burnBroken：0 的 A A 被对头 3 用 2 2 解烧。
  * - rang：3 发 6 6，4、5 过，轮到 0 可以让牌；rangReturned：0 让牌后 1、2 都过，回到 0。
@@ -351,8 +353,12 @@ const BURN_HAND = "A A 7 7 7 9 9 小 大";
  */
 export function createScene(name: SceneName): GoujiState {
   switch (name) {
-    case "opening":
-      return buildDeal({ seed: 7, firstLeader: 0, bots: [1, 2, 3, 4, 5] });
+    case "opening": {
+      // 发完牌先过革命阶段（每盘都有，人人表态「不革命 / 继续」）
+      let state = buildDeal({ seed: 7, firstLeader: 0, bots: [1, 2, 3, 4, 5] });
+      for (const seat of SEATS) if (state.stage === "revolution") state = applyGouji(state, `p${seat + 1}`, { type: "REVOLT", revolt: false }).state;
+      return state;
+    }
     case "beforeLead":
       return buildState({ hands: { 0: "3 3 3 5 6 6 9 9 9 9 K K 2 小", 1: 14, 2: 14, 3: 14, 4: 14, 5: 14 }, turn: 0, leader: 0 });
     case "beforeRespond":

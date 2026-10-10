@@ -139,7 +139,7 @@ export function pendingSeats(state: GoujiState): number[] {
     case "return":
       return [...new Set(state.tribute!.items.filter((item) => needsReturn(item) && item.returned === null).map((item) => item.receiver))];
     case "revolution":
-      return state.revolution!.eligible.filter((seat) => state.revolution!.choices[seat] === null);
+      return SEATS.filter((seat) => state.revolution!.choices[seat] === null);
     case "handEnd":
       return SEATS.filter((seat) => !state.ready.includes(state.players[seat]!.id));
     case "playing":
@@ -399,28 +399,28 @@ function returnTribute(ctx: Ctx, seat: number, cards: readonly Card[]): void {
 // ---------------------------------------------------------------------------
 // 革命（3.4）
 
+/**
+ * 进贡还贡完成后**每盘都进革命阶段**，6 个座位都要表态：手里没王没 2 的人选革命 / 不革命，其他人只能选「不革命」（界面上是「继续」）。
+ * 所有人都表态了（或者超时）才结束——阶段出不出现、什么时候结束都和谁能革命无关，不然一出现革命阶段大家就知道有人一张配牌都没有。
+ */
 function afterTribute(ctx: Ctx): void {
   const { state } = ctx;
   const eligible = SEATS.filter((seat) => state.players[seat]!.hand.length > 0 && !state.players[seat]!.hand.some(isWild));
-  if (eligible.length > 0) {
-    state.revolution = { eligible, choices: [null, null, null, null, null, null] };
-    state.stage = "revolution";
-    state.turn = -1;
-    state.step += 1;
-    return;
-  }
-  startPlay(ctx);
+  state.revolution = { eligible, choices: [null, null, null, null, null, null] };
+  state.stage = "revolution";
+  state.turn = -1;
+  state.step += 1;
 }
 
 function chooseRevolt(ctx: Ctx, seat: number, revolt: boolean): void {
   const { state } = ctx;
   const revolution = state.revolution;
   if (state.stage !== "revolution" || !revolution) fail("现在不是选革命的时候。");
-  if (!revolution.eligible.includes(seat)) fail("手里有王或 2，不能革命。");
+  if (revolt === true && !revolution.eligible.includes(seat)) fail("手里有王或 2，不能革命。");
   if (revolution.choices[seat] !== null) fail("你已经选过了。");
   revolution.choices[seat] = revolt === true;
   ctx.queued = true;
-  if (revolution.eligible.some((other) => revolution.choices[other] === null)) return;
+  if (revolution.choices.some((choice) => choice === null)) return;
   const revolters = revolution.eligible.filter((other) => revolution.choices[other] === true);
   state.revolution = null;
   if (revolters.length >= 2) {
@@ -819,6 +819,7 @@ export function applyGouji(
   command: GoujiCommand | SystemCommand,
   rng?: Rng,
 ): { state: GoujiState; events: GoujiEvent[] } {
+  if (!command || typeof command !== "object" || typeof command.type !== "string") fail("不认识的操作。");
   if (input.phase === "finished" && command.type !== "AUTO") fail("对局已经结束。");
   const state = cloneState(input);
   delete state.you;
@@ -834,7 +835,8 @@ export function applyGouji(
   const seat = state.players.findIndex((player) => player.id === playerId);
   if (seat < 0) fail("你不在这局里。");
   act(ctx, seat, command, false);
-  if (command.type !== "AUTO" && command.type !== "BURN") state.players[seat]!.timeouts = 0;
+  // 烧牌、革命表态不清零连续超时（革命阶段人人都要表态，清不清零都不能和谁能革命扯上关系）
+  if (command.type !== "AUTO" && command.type !== "BURN" && command.type !== "REVOLT") state.players[seat]!.timeouts = 0;
   return { state: finish(ctx, input), events: ctx.events };
 }
 
@@ -882,10 +884,16 @@ function smallestSingle(hand: readonly Card[]): Card {
 /** 烧牌状态下发牌超时：出程序找到的一个合法出法，优先挂王最少的一套（整手是一套就全出）。 */
 export function burnLeadDefault(hand: readonly Card[]): Card[] {
   if (parseSet(hand)) return sortCards(hand);
+  // 最小的一整组普通牌 + 1 张王（优先小王）：剩下的牌少一种点数、少一张王，仍然满足 J ≥ m − 1
+  const lowest = Math.min(...hand.map(rankOf).filter((rank) => rank <= 14));
+  const joker = hand.find((card) => rankOf(card) === 16) ?? hand.find((card) => rankOf(card) === 17);
+  if (Number.isFinite(lowest) && joker !== undefined) {
+    const cards = sortCards([...hand.filter((card) => rankOf(card) === lowest), joker]);
+    if (legalBurnLead(hand, cards)) return cards;
+  }
   const moves = leadMoves(hand, true);
   const jokers = (cards: Card[]) => cards.filter((card) => rankOf(card) >= 16).length;
-  const rankSum = (cards: Card[]) => cards.reduce((sum, card) => sum + rankOf(card), 0);
-  moves.sort((a, b) => jokers(a) - jokers(b) || b.length - a.length || rankSum(a) - rankSum(b));
+  moves.sort((a, b) => jokers(a) - jokers(b) || rankOf(a[a.length - 1]!) - rankOf(b[b.length - 1]!));
   return moves[0] ?? [smallestSingle(hand)];
 }
 
@@ -965,7 +973,8 @@ export function legalCommands(state: GoujiState, playerId: string): GoujiCommand
     }
     case "revolution": {
       const revolution = state.revolution!;
-      return revolution.eligible.includes(seat) && revolution.choices[seat] === null ? [{ type: "REVOLT", revolt: true }, { type: "REVOLT", revolt: false }] : [];
+      if (revolution.choices[seat] !== null) return [];
+      return revolution.eligible.includes(seat) ? [{ type: "REVOLT", revolt: true }, { type: "REVOLT", revolt: false }] : [{ type: "REVOLT", revolt: false }];
     }
     case "handEnd":
       return state.ready.includes(playerId) ? [] : [{ type: "READY" }];

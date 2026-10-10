@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  applyCommand,
   beats,
   buildDeal,
   buildState,
@@ -27,9 +28,10 @@ import {
   burnWindowKey,
   type GameState,
 } from "../src/index.js";
-import { act, burn, pass, passSettled, pick, pid, play, playSettled, runUntil, settle, tick, total } from "./helpers.js";
+import { act, burn, othersNoRevolt, pass, passSettled, pick, pid, play, playSettled, runUntil, settle, tick, total } from "./helpers.js";
 
 const set = (text: string) => parseSet(parseCards(text))!;
+const createWindow = () => buildState({ hands: { 0: "K K 5 6", 3: "A A 4 9", 1: "3 4 5 6 7 8 9 10 J Q 3 4 5 6 7 8", 2: "3 4 5 6 7 8 9 10 J Q 3 4 5 6 7 8", 4: "3 4 5 6 7 8 9 10 J Q 3 4 5 6 7 8", 5: "3 4 5 6 7 8 9 10 J Q 3 4 5 6 7 8" }, top: { seat: 0, cards: "K K" } });
 const WEAK = "3 4 5 6 7 8 9 10 J Q 3 4 5 6 7 8";
 
 describe("勘误#1 革命者扣下的牌不算手里有牌（在打的人 = 有牌且不是革命者）", () => {
@@ -293,7 +295,9 @@ describe("§3.3 进贡细节", () => {
     const state = buildDeal({ options: { tribute: false }, prevResult: { order: [0, 3, 1, 2, 4, 5] }, seed: 23 });
     expect(state.tribute).toBeNull();
     expect(state.firstLeader).toBe(5);
-    if (state.stage === "playing") expect(state.turn).toBe(5);
+    const playing = othersNoRevolt(state);
+    expect(playing.stage).toBe("playing");
+    expect(playing.turn).toBe(5);
   });
 
   it("上一盘的革命者在赢的一队：他的对头照常给他串贡", () => {
@@ -303,14 +307,22 @@ describe("§3.3 进贡细节", () => {
 });
 
 describe("§3.4 革命", () => {
-  it("可以不革命；没人能革命就没有革命阶段；革命者不能烧也不会被烧", () => {
+  it("可以不革命；每盘都有革命阶段（没人能革命时大家都只能选「继续」），所有人表态完才开始出牌；革命者不能烧也不会被烧", () => {
     let state = buildDeal({ noWild: [2], seed: 37, firstLeader: 0 });
     expect(state.stage).toBe("revolution");
     expect(stepSeconds(state)).toBe(10);
     state = act(state, 2, { type: "REVOLT", revolt: false });
+    expect(state.stage).toBe("revolution"); // 还有人没表态
+    expect(state.version).toBe(buildDeal({ noWild: [2], seed: 37, firstLeader: 0 }).version);
+    state = othersNoRevolt(state);
     expect(state.stage).toBe("playing");
     expect(state.revolutionary).toBeNull();
-    expect(buildDeal({ seed: 37 }).stage).toBe("playing");
+    const nobody = buildDeal({ seed: 37 });
+    expect(nobody.stage).toBe("revolution");
+    expect(legalCommands(nobody, pid(3))).toEqual([{ type: "REVOLT", revolt: false }]);
+    expect(othersNoRevolt(nobody).stage).toBe("playing");
+    // 革命阶段的长短和谁能革命无关：没人能革命时，所有人表态之前也一直停在革命阶段
+    expect(othersNoRevolt(nobody, [5]).stage).toBe("revolution");
     const rebel = buildState({ revolutionary: 2, hands: { 0: "K K 5", 1: WEAK, 3: "4 5", 4: WEAK, 5: WEAK }, top: { seat: 0, cards: "K K" } });
     expect(canBurn(rebel, 2)).toBe(false);
   });
@@ -328,6 +340,33 @@ describe("§3.4 革命", () => {
   });
 });
 
+describe("系统操作和革命探测（评审发现的问题）", () => {
+  it("applyCommand 拒绝 TIMEOUT / TICK（客户端不能替别人超时、不能提前关烧牌窗口）和不认识的操作", () => {
+    const window = createWindow();
+    expect(() => applyCommand(window, pid(3), { type: "TICK" } as never)).toThrow(/不认识/);
+    expect(() => applyCommand(window, pid(3), { type: "TIMEOUT" } as never)).toThrow(/不认识/);
+    expect(() => applyCommand(window, pid(3), null as never)).toThrow(/不认识/);
+    expect(() => applyCommand(window, pid(3), { type: "FOO" } as never)).toThrow(/不认识/);
+    expect(window.round!.top!.ready).toBe(false);
+  });
+
+  it("革命阶段：有资格和没资格的人超时都只是先收下（version 不变），探测不出谁能革命", () => {
+    const state = buildDeal({ noWild: [2], seed: 61, firstLeader: 0 });
+    const eligibleTimedOut = timeoutTurn(state, [2]);
+    const otherTimedOut = timeoutTurn(state, [4]);
+    expect(eligibleTimedOut.version).toBe(state.version);
+    expect(otherTimedOut.version).toBe(state.version);
+    for (const viewer of [0, 1, 3, 5]) {
+      expect(JSON.stringify(redactGameForViewer(eligibleTimedOut, pid(viewer)))).toBe(JSON.stringify(redactGameForViewer(otherTimedOut, pid(viewer))));
+    }
+  });
+
+  it("buildState 结算局面带革命者、不给结果时，革命者排四科", () => {
+    const state = buildState({ stage: "handEnd", revolutionary: 4, finished: [1, 0, 3, 5], hands: { 2: 3 } });
+    expect(state.result!.order).toEqual([1, 0, 3, 4, 5, 2]);
+  });
+});
+
 describe("§3.5 首出", () => {
   it("第 1 盘随机；第 2 盘起上一盘大落先出；串三户后头科的对头先出；该先出的人革命了由下一个没革命的下家先出", () => {
     const firsts = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((seed) => createGame([0, 1, 2, 3, 4, 5].map((seat) => ({ id: pid(seat), name: `P${seat}` })), seed).firstLeader));
@@ -335,7 +374,7 @@ describe("§3.5 首出", () => {
     expect(buildDeal({ prevResult: { order: [3, 0, 1, 2, 4, 5] }, options: { tribute: false }, seed: 3 }).firstLeader).toBe(5);
     expect(buildDeal({ prevResult: { order: [3, 5, 1], sweep: true }, options: { tribute: false }, seed: 3 }).firstLeader).toBe(0);
     let rebel = buildDeal({ noWild: [5], firstLeader: 5, seed: 43 });
-    rebel = act(rebel, 5, { type: "REVOLT", revolt: true });
+    rebel = othersNoRevolt(act(rebel, 5, { type: "REVOLT", revolt: true }));
     expect(rebel.turn).toBe(0);
   });
 });

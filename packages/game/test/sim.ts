@@ -259,7 +259,8 @@ export function simulate(options: { matches: number; seed: number; gameOptions?:
             stats.burnRequests += 1;
           } else {
             const seat = pending[Math.floor(random() * pending.length)]!;
-            const command = state.stage === "revolution" ? ({ type: "REVOLT", revolt: random() < 0.6 } as GameCommand) : choose(state, seat, random, keepers.has(seat));
+            const options = state.stage === "revolution" ? legalCommands(state, pid(seat)) : [];
+            const command = state.stage === "revolution" ? (options.length > 1 && random() < 0.6 ? options[0]! : options[options.length - 1]!) : choose(state, seat, random, keepers.has(seat));
             state = applyCommand(state, pid(seat), command);
           }
         }

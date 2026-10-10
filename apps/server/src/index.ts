@@ -297,9 +297,15 @@ const LOBBY_UPDATE_INTERVAL_MS = 1_000;
 let lobbyUpdateTimer: ReturnType<typeof setTimeout> | undefined;
 let lobbyUpdatePending = false;
 
+/** 上一次推送的列表；没变就不推（烧牌窗口里先收下的动作不能让首页的人察觉到动静）。 */
+let lastLobbyJson = "";
+
 /** 只推送给停留在首页（不在任何房间里）的连接；房间里的玩家看不到这个列表。 */
 function sendLobbyUpdate(): void {
   const summaries = roomSummaries();
+  const json = JSON.stringify(summaries);
+  if (json === lastLobbyJson) return;
+  lastLobbyJson = json;
   for (const [socketId, client] of io.sockets.sockets) {
     if (!socketRooms.has(socketId)) client.emit("lobby:updated", summaries);
   }

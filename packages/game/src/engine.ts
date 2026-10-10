@@ -27,8 +27,12 @@ export function createGame(players: readonly NewPlayer[], seed: number, options:
   return createGouji(players, seed, options, overrides);
 }
 
+/** 玩家能发的操作（系统操作 TIMEOUT / TICK 只能走 timeoutTurn / tickBurnWindow，客户端发来一律拒绝）。 */
+const PLAYER_COMMANDS = new Set(["PLAY", "PASS", "RANG", "BURN", "TRIBUTE", "RETURN", "REVOLT", "READY", "AUTO"]);
+
 /** 玩家（或人机）的操作。不合法时抛出带中文说明的错误。rng 可以不给（用状态里的种子随机数）。 */
 export function applyCommand(state: GameState, playerId: string, command: GameCommand, rng?: Rng): GameState {
+  if (!command || typeof command !== "object" || !PLAYER_COMMANDS.has((command as { type?: unknown }).type as string)) throw new Error("不认识的操作。");
   return applyGouji(state, playerId, command, rng).state;
 }
 

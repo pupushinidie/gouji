@@ -53,3 +53,13 @@ export function runUntil(state: GameState, until: (state: GameState) => boolean,
 
 export const total = (state: GameState): number =>
   state.players.reduce((sum, player) => sum + player.hand.length, 0) + state.revolutionHand.length + state.discard.length;
+
+/** 革命阶段：除了 except 里的座位，其他还没表态的人都选「不革命」（每盘都有革命阶段，人人都要表态）。 */
+export function othersNoRevolt(state: GameState, except: readonly number[] = []): GameState {
+  let current = state;
+  for (let seat = 0; seat < 6 && current.stage === "revolution"; seat += 1) {
+    if (except.includes(seat) || current.revolution!.choices[seat] !== null) continue;
+    current = act(current, seat, { type: "REVOLT", revolt: false });
+  }
+  return current;
+}
