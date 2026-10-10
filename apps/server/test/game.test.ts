@@ -7,7 +7,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { io as createClient, type Socket } from "socket.io-client";
 import {
   applyCommand,
+  buildDeal,
   buildState,
+  createScene,
+  parseCards,
+  type PublicRoomSummary,
   legalCommands,
   createGame,
   tickBurnWindow,
@@ -25,6 +29,7 @@ process.env.BOT_DELAY_SCALE = "0";
 process.env.TURN_MS = "600";
 process.env.BURN_WINDOW_MS = "300";
 process.env.OFFLINE_TURN_MS = "200";
+process.env.ADMIN_TOKEN = "gouji-admin-test-token";
 
 type TestSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -137,8 +142,8 @@ describe("够级房间", () => {
     const guestName = nick("客人");
     expect((await join(guest, guestName, room.code)).members.find((member) => member.name === guestName)!.seat).toBe(3);
     const third = await connect();
-    await join(third, nick("路人"), room.code);
-    expect(me(third)?.seat ?? (await updateWhere(third, (snapshot) => snapshot.members.length === 3)).members[2]!.seat).toBe(1);
+    const thirdName = nick("路人");
+    expect((await join(third, thirdName, room.code)).members.find((member) => member.name === thirdName)!.seat).toBe(1);
 
     expect((await call<void>((ack) => guest.emit("room:seat", 0, ack))).ok).toBe(false); // 有人
     expect((await call<void>((ack) => guest.emit("room:seat", 9, ack))).ok).toBe(false);
@@ -292,5 +297,92 @@ describe("够级房间", () => {
     expect(rejoined.game!.players[3]!.hand.length).toBe(rejoined.game!.players[3]!.handCount);
     expect(rejoined.game!.players[3]!.hand.length).toBeGreaterThan(0);
     await call<void>((ack) => host.emit("room:dissolve", ack));
+  });
+
+  it("每种操作都能经过服务器：吃贡 / 免贡、还贡、革命、让牌、出牌、过牌、烧牌、下一盘、托管开关", async () => {
+    const host = await connect();
+    const room = await create(host, nick("全操作"));
+    await updateWhere(host, (snapshot) => snapshot.members.length === 1);
+    const send = (command: GameCommand) => call<LobbyRoomSnapshot>((ack) => host.emit("game:command", command, ack));
+    const seated = latest.get(host)!;
+
+    // 队内贡：上一盘头科 0、大落 4 同是甲 → 0 选吃贡，然后还 2 张
+    server.testHooks.setGame(room.code, adopt(buildDeal({ prevResult: { order: [0, 3, 1, 5, 2, 4] }, hands: { 4: "大 大 小" }, noWild: [4], seed: 4 }), seated));
+    await updateWhere(host, (snapshot) => snapshot.game?.stage === "tribute");
+    const ate = await send({ type: "TRIBUTE", eat: true });
+    expect(ate.ok && ate.data.game!.stage).toBe("return");
+    const hand = ate.ok ? ate.data.game!.players[0]!.hand : [];
+    const returned = await send({ type: "RETURN", cards: hand.slice(-2) });
+    expect(returned.ok).toBe(true);
+    await updateWhere(host, (snapshot) => snapshot.game?.history.some((event) => event.type === "TributeReturned") === true);
+
+    // 免贡
+    server.testHooks.setGame(room.code, adopt(buildDeal({ prevResult: { order: [0, 3, 1, 5, 2, 4] }, hands: { 4: "大 大 小" }, noWild: [4], seed: 4 }), seated));
+    await updateWhere(host, (snapshot) => snapshot.game?.stage === "tribute");
+    const waived = await send({ type: "TRIBUTE", eat: false });
+    expect(waived.ok && waived.data.game!.history.some((event) => event.type === "TributeChosen" && !event.eat)).toBe(true);
+
+    // 革命
+    server.testHooks.setGame(room.code, adopt(buildDeal({ noWild: [0], seed: 5, firstLeader: 1 }), seated));
+    await updateWhere(host, (snapshot) => snapshot.game?.stage === "revolution" && snapshot.game.you?.canRevolt === true);
+    const revolted = await send({ type: "REVOLT", revolt: true });
+    expect(revolted.ok).toBe(true);
+    await updateWhere(host, (snapshot) => snapshot.game?.revolutionary === 0);
+
+    // 让牌、过牌
+    server.testHooks.setGame(room.code, adopt(createScene("rang"), seated));
+    await updateWhere(host, (snapshot) => snapshot.game?.turn === 0 && snapshot.game.round?.top !== null);
+    const ranged = await send({ type: "RANG" });
+    expect(ranged.ok && ranged.data.game!.round!.rang!.seat).toBe(0);
+    // 1、2 号（人机占位策略随机出）都没上牌就回到 0；有人上了牌 0 算过牌
+    const rangedRound = (snapshot: LobbyRoomSnapshot) => snapshot.game?.round?.entries.some((entry) => entry.kind === "rang") === true;
+    const back = await updateWhere(host, (snapshot) => rangedRound(snapshot) && (snapshot.game!.round!.rang === null || (snapshot.game!.round!.rang.returned && snapshot.game!.turn === 0)));
+    if (back.game!.round!.rang) expect((await send({ type: "PASS" })).ok).toBe(true);
+    else expect(back.game!.round!.passed).toContain(0);
+
+    // 发牌出牌
+    server.testHooks.setGame(room.code, adopt(createScene("beforeLead"), seated));
+    await updateWhere(host, (snapshot) => snapshot.game?.turn === 0 && snapshot.game.round?.top === null && snapshot.game.players[0]!.hand.length === 14);
+    const led = await send({ type: "PLAY", cards: latest.get(host)!.game!.players[0]!.hand.filter((card) => card % 54 < 4) });
+    expect(led.ok && led.data.game!.round!.top!.seat).toBe(0);
+
+    // 烧牌（窗口里按，满窗口时生效）
+    server.testHooks.setGame(room.code, adopt(createScene("burnWindow"), seated));
+    const window = await updateWhere(host, (snapshot) => snapshot.game?.round?.top?.seat === 1 && (snapshot.game.you?.burnCandidates.length ?? 0) > 0);
+    const burnt = await send({ type: "BURN", cards: window.game!.you!.burnCandidates[0]! });
+    expect(burnt.ok && burnt.data.game!.you!.burnRequested).not.toBeNull();
+    await updateWhere(host, (snapshot) => snapshot.game?.burn?.burner === 0);
+
+    // 结算画面「下一盘」
+    server.testHooks.setGame(room.code, adopt(createScene("handEnd"), seated));
+    await updateWhere(host, (snapshot) => snapshot.game?.stage === "handEnd" && snapshot.game.ready.length === 0);
+    const ready = await send({ type: "READY" });
+    // 人机先点了的话，房主一点就进下一盘
+    expect(ready.ok && (ready.data.game!.ready.includes(seated.members[0]!.playerId) || ready.data.game!.handNo === 2)).toBe(true);
+
+    // 托管开关
+    expect((await send({ type: "AUTO", on: true })).ok).toBe(true);
+    await updateWhere(host, (snapshot) => snapshot.game?.players[0]!.auto === true);
+    expect((await send({ type: "AUTO", on: false })).ok).toBe(true);
+    // 不合法的操作被拒，带中文说明
+    const bad = await send({ type: "PLAY", cards: parseCards("8 9") });
+    expect(bad.ok).toBe(false);
+    await call<void>((ack) => host.emit("room:dissolve", ack));
+  }, 30_000);
+
+  it("管理员解散：口令不对被拒；口令对了房间里的人都收到通知", async () => {
+    const host = await connect();
+    const name = nick("被解散");
+    await create(host, name);
+    const admin = await connect();
+    const summary = await new Promise<PublicRoomSummary | undefined>((resolve) =>
+      admin.emit("lobby:get", (response) => resolve(response.ok ? response.data.find((room) => room.players[0]?.name === name) : undefined)),
+    );
+    expect(summary).toBeDefined();
+    expect((await call<void>((ack) => admin.emit("admin:dissolve", { roomId: summary!.id, token: "wrong" }, ack))).ok).toBe(false);
+    await delay(2_100); // 口令错一次要等 2 秒才能再试
+    const closed = new Promise<string>((resolve) => host.once("room:closed", ({ reason }) => resolve(reason)));
+    expect((await call<void>((ack) => admin.emit("admin:dissolve", { roomId: summary!.id, token: "gouji-admin-test-token" }, ack))).ok).toBe(true);
+    expect(await closed).toContain("管理员");
   });
 });
