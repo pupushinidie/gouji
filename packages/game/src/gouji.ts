@@ -922,6 +922,10 @@ function timeoutAll(ctx: Ctx, seats?: readonly number[]): void {
     const eventsBefore = ctx.events.length;
     ctx.queued = false;
     act(ctx, seat, command, true);
+    // 一个人有两份队内贡要选时，超时一次把他的都定成吃贡
+    for (let guard = 0; stage === "tribute" && state.stage === "tribute" && pendingSeats(state).includes(seat) && guard < 4; guard += 1) {
+      act(ctx, seat, timeoutCommand(state, seat), true);
+    }
     const queuedOnly = ctx.queued && ctx.events.length === eventsBefore;
     anyQueued ||= ctx.queued;
     // 先收下的动作（烧牌窗口里、同时决定的阶段）生效时才公开；革命的超时不公开。

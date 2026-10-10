@@ -245,6 +245,22 @@ describe("§3.3 进贡细节", () => {
     expect(done.players[0]!.hand.filter((card) => card % 54 === 53)).toHaveLength(2);
   });
 
+  it("一个人有两份队内贡：每份单独选；超时一次全算吃贡", () => {
+    // 上一盘 4 烧过 0 成功（队友），0 又是大落、4 是头科（队友）：4 收 0 的烧贡和落贡，两份都是队内贡
+    const state = buildDeal({ prevResult: { order: [4, 3, 1, 5, 2, 0], burns: [{ burner: 4, victim: 0 }] }, hands: { 0: "大 小 2 2" }, noWild: [0], seed: 53 });
+    expect(state.tribute!.items.filter((item) => item.receiver === 4 && item.intra)).toHaveLength(2);
+    const first = act(state, 4, { type: "TRIBUTE", eat: false, item: 0 });
+    expect(pendingSeats(first)).toContain(4);
+    const timedOut = timeoutTurn(first);
+    const paid = timedOut.events.filter((event) => event.type === "TributePaid").map((event) => [event.kind, event.giver, event.receiver, cardsText(event.cards)]);
+    // 烧贡免了，落贡吃：0 的大王、小王进给 4
+    expect(paid).toContainEqual(["luo", 0, 4, "大 小"]);
+    expect(paid.some((entry) => entry[0] === "burn")).toBe(false);
+    const both = timeoutTurn(state);
+    expect(both.events.filter((event) => event.type === "TributeChosen" && event.receiver === 4).every((event) => event.type === "TributeChosen" && event.eat)).toBe(true);
+    expect(both.events.filter((event) => event.type === "TributeChosen" && event.receiver === 4)).toHaveLength(2);
+  });
+
   it("还贡：张数要等于实际收到的；可以还刚收到的贡牌；20 秒超时还点数最小的牌", () => {
     let state = buildDeal({ prevResult: { order: [1, 0, 3, 2, 5, 4] }, hands: { 4: "大 小" }, noWild: [4], seed: 19 });
     // 4（甲）给 1（乙）2 张，跨队直接到账
