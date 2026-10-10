@@ -5,7 +5,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const connect = () => new Promise((resolve) => { const s = io(URL, { transports: ["websocket"], reconnection: false }); s.once("connect", () => resolve(s)); });
 const call = (s, event, ...args) => new Promise((resolve) => s.emit(event, ...args, resolve));
 const first = await connect();
-const created = await call(first, "room:create", { name: "重连测试", options: { hands: 3 } });
+const created = await call(first, "room:create", { name: "重连测试", options: { hands: 1 } });
 const code = created.data.code;
 await call(first, "room:start");
 let latest = null;
