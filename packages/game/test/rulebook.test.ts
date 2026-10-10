@@ -429,8 +429,9 @@ describe("规则书 T15–T18：进贡、抗贡、革命", () => {
     expect(normal.tribute!.items[0]).toMatchObject({ kind: "luo", giver: 4, receiver: 0, count: 2, intra: true, eat: null });
     expect(pendingSeats(normal)).toEqual([0]);
     const timedOut = timeoutTurn(normal);
-    expect(timedOut.events.find((event) => event.type === "TributePaid" && event.giver === 4)).toMatchObject({ receiver: 0 });
-    expect(cardsText(timedOut.events.find((event) => event.type === "TributePaid" && event.giver === 4)!.cards)).toBe("大 大");
+    const paid = timedOut.events.find((event) => event.type === "TributePaid" && event.giver === 4);
+    expect(paid).toMatchObject({ receiver: 0 });
+    expect(paid?.type === "TributePaid" ? cardsText(paid.cards) : "").toBe("大 大");
   });
 
   it("规则书#T17 4 没王没 2 宣布革命、其他人不革命：4 不出牌算四科，1 从开局起无头，该 4 先出改由 5 先出；0、2 先后走科 → 4 算三科，甲串三户 +12", () => {

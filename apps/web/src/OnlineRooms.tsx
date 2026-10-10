@@ -56,7 +56,7 @@ function OnlineRooms({ rooms, connected, busy, onJoin }: {
                 <span className="online-room-seats">
                   {room.open ? <em className="online-room-tag open">公开</em> : null}
                   {room.spectators > 0 ? <em className="online-room-tag">观战 {room.spectators}</em> : null}
-                  {optionsLabel(room)} · {room.players.length} 人{room.players.length < 3 ? ` + ${3 - room.players.length} 人机` : ""}
+                  {optionsLabel(room)} · {room.players.length} 人{room.players.length < 6 ? ` + ${6 - room.players.length} 人机` : ""}
                 </span>
               </div>
               <ul className="online-room-players">
@@ -73,7 +73,7 @@ function OnlineRooms({ rooms, connected, busy, onJoin }: {
                 ))}
               </ul>
               {(() => {
-                const canSit = room.open && room.status === "waiting" && room.players.length < 3;
+                const canSit = room.open && room.status === "waiting" && room.players.length < 6;
                 if (!canSit && !room.allowSpectators) return null;
                 return (
                   <div className="online-room-actions">
@@ -98,10 +98,10 @@ function OnlineRooms({ rooms, connected, busy, onJoin }: {
   );
 }
 
-/** 房间卡片上的选项：「6 盘 · 底分 1」这样的短说明。 */
+/** 房间卡片上的选项：「5 盘 · 进贡」这样的短说明。 */
 function optionsLabel(room: PublicRoomSummary): string {
   const options = room.options;
-  return `${options.hands} 盘 · 底分 ${options.base}`;
+  return `${options.hands} 盘${options.tribute ? "" : " · 不进贡"}`;
 }
 
 export default OnlineRooms;

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { DEFAULT_OPTIONS, SEAT_COUNT, type Card, type GameCommand, type GameOptions, type LobbyRoomSnapshot, type PublicRoomSummary } from "@gouji/game";
+import { DEFAULT_OPTIONS, SEAT_COUNT, TEAM_NAMES, teamOf, type Card, type GameCommand, type GameOptions, type LobbyRoomSnapshot, type PublicRoomSummary } from "@gouji/game";
 import { art, seatColor } from "./art.js";
 import { CardView } from "./cards.js";
 import { useConfirm } from "./confirm.js";
-import GameBoard from "./GameBoard.js";
+import DebugBoard from "./DebugBoard.js";
 import GameRules from "./GameRules.js";
 import OnlineRooms from "./OnlineRooms.js";
 import RoomChat from "./RoomChat.js";
@@ -228,25 +228,22 @@ function App() {
   }
 
   if (room?.status === "playing" && room.game) {
-    const players = room.game.players;
-    const watched = players.some((player) => player.id === watchId) ? watchId : players[0]!.id;
+    // 调试牌桌（引擎阶段）；正式牌桌由界面阶段做。watchId 留给观战选座位用。
+    void watchId;
+    void setWatchId;
     return (
       <main className="app-shell dz-game">
-        <GameBoard
+        <DebugBoard
           room={room}
           busy={busy}
           error={error}
           notice={notice}
           brand={<Brand />}
-          connection={<ConnectionStatus connected={connected} />}
-          theme={theme}
           themeToggle={themeToggle}
           chat={<RoomChat room={room} voice={voice} />}
           onCommand={submitGameCommand}
           onRematch={voteRematch}
           onDissolve={dissolveRoom}
-          watchId={watched}
-          onWatch={setWatchId}
           onLeave={leaveRoom}
         />
         {confirmDialog}
@@ -296,16 +293,16 @@ function App() {
 
       <section className="welcome-grid">
         <div className="welcome-copy">
-          <div className="eyebrow"><span className="eyebrow-line" /> 在线对战 · 1–3 人 · 空座人机补位</div>
-          <h1>斗地主</h1>
+          <div className="eyebrow"><span className="eyebrow-line" /> 在线对战 · 6 座 3 对 3 · 空座人机补位</div>
+          <h1>够级</h1>
           <p className="welcome-description">
-            三个座位，一副牌。叫地主、抢地主，地主多拿 3 张底牌，一个人打两个农民；谁先出完谁那一方赢。
-            炸弹、王炸、春天都翻倍。人不够时人机坐空座，一个人也能练手。
+            青岛的四副牌扑克。六个人隔座组成两个联邦，正对面是你的对头；比谁先出完。
+            够大的牌只有对头能管，牌好时还能抢着「烧」。人不够时人机坐空座，一个人也能练手。
           </p>
           <ul className="dz-home-points">
-            <li><b>叫抢</b>叫地主、抢地主，每抢一次 ×2</li>
-            <li><b>明牌</b>发牌前明牌 ×5，地主拿底牌后明牌 ×2</li>
-            <li><b>加倍</b>三人同时选，只翻自己和对手之间那份</li>
+            <li><b>够级</b>2 张 K、3 张 Q……只有对头能管</li>
+            <li><b>烧牌</b>能一口气出完时抢着压别人的够级牌</li>
+            <li><b>进贡</b>大落、二落把王和 2 送给头科、二科</li>
           </ul>
           <div className="dz-hero" style={{ backgroundImage: `url(${theme === "day" ? art.sceneDay : art.sceneNight})` }}>
             <div className="dz-showcase" aria-hidden="true">
@@ -363,7 +360,7 @@ function App() {
                 <>
                   <label className="field-label field-label-spaced" htmlFor="room-hands">打几盘</label>
                   <div className="capacity-options dz-hands-pick" id="room-hands" role="group" aria-label="选择盘数">
-                    {([3, 6, 9, 12] as const).map((count) => (
+                    {([1, 3, 5, 8] as const).map((count) => (
                       <button
                         key={count}
                         type="button"
@@ -375,7 +372,7 @@ function App() {
                       </button>
                     ))}
                   </div>
-                  <p className="field-hint">一盘约 3–5 分钟。底分、明牌、加倍、记牌器进房间后房主可以改；空座位开局时由人机补上。</p>
+                  <p className="field-hint">一盘约 15–25 分钟。进贡、让牌、看牌进房间后房主可以改；空座位开局时由人机补上。</p>
                 </>
               ) : (
                 <>
@@ -413,9 +410,9 @@ function App() {
 
 function Brand() {
   return (
-    <a className="brand" href={import.meta.env.BASE_URL} aria-label="斗地主首页">
+    <a className="brand" href={import.meta.env.BASE_URL} aria-label="够级首页">
       <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-      <span className="brand-name">斗地主<span> DOU DIZHU</span></span>
+      <span className="brand-name">够级<span> GOU JI</span></span>
     </a>
   );
 }
@@ -460,12 +457,10 @@ function OptionsPanel({ room }: { room: LobbyRoomSnapshot }) {
   return (
     <div className="dz-options">
       <div className="panel-label">开房选项 <span>{isHost ? "房主可以改" : "只有房主能改"}</span></div>
-      {row("底分", "base", [{ value: 1, text: "1" }, { value: 2, text: "2" }, { value: 5, text: "5" }])}
-      {row("盘数", "hands", [{ value: 3, text: "3 盘" }, { value: 6, text: "6 盘" }, { value: 9, text: "9 盘" }, { value: 12, text: "12 盘" }])}
-      {row("明牌", "mingpai", onOff)}
-      {row("加倍", "doubling", onOff)}
-      {row("超级加倍", "superDouble", onOff, !options.doubling)}
-      {row("记牌器", "tracker", onOff)}
+      {row("盘数", "hands", [{ value: 1, text: "1 盘" }, { value: 3, text: "3 盘" }, { value: 5, text: "5 盘" }, { value: 8, text: "8 盘" }])}
+      {row("进贡", "tribute", onOff)}
+      {row("让牌", "rang", onOff)}
+      {row("看牌", "peek", onOff)}
       {error && <p className="feedback feedback-error" role="alert">{error}</p>}
     </div>
   );
@@ -501,7 +496,7 @@ function RoomView({
     <section className="room-layout">
       <div className="room-heading">
         <div>
-          <div className="eyebrow"><span className="eyebrow-line" /> {room.status === "waiting" ? "等待大厅" : "对局已创建"} · 斗地主</div>
+          <div className="eyebrow"><span className="eyebrow-line" /> {room.status === "waiting" ? "等待大厅" : "对局已创建"} · 够级</div>
           <h1>{spectating ? "你在观战。" : room.status === "waiting" ? "牌桌准备中。" : "好戏即将开始。"}</h1>
           <p>{spectating ? "等房主开始对局；有空座位时可以坐下一起玩。" : "把房间码分享给朋友；人没到齐也能开始，空座位由人机补上。"}</p>
         </div>
@@ -536,31 +531,38 @@ function RoomView({
               <span className="waiting-pill"><i /> 等待中</span>
             </div>
             <div className="player-list">
-              {room.members.map((member, index) => (
-                <div className="player-row" key={member.id}>
-                  <div className="player-avatar dz-member-avatar" style={{ background: seatColor(index) } as CSSProperties}>
-                    <img src={art.avatar(index)} alt="" onError={(event) => { event.currentTarget.style.display = "none"; }} />
-                    <span>{member.name.slice(0, 1).toUpperCase()}</span>
+              {Array.from({ length: SEAT_COUNT }, (_, seat) => {
+                const member = room.members.find((candidate) => candidate.seat === seat);
+                const mine = room.members.find((candidate) => candidate.id === socket.id);
+                const team = `${TEAM_NAMES[teamOf(seat)]}联邦 · ${seat} 号座`;
+                if (!member) {
+                  return (
+                    <div className="player-row open-seat" key={`seat-${seat}`}>
+                      <div className="empty-avatar"><span>＋</span></div>
+                      <div className="player-details"><strong>空座：人机补位</strong><span>{team}</span></div>
+                      {mine && <button className="kick-button" type="button" onClick={() => socket.emit("room:seat", seat, () => {})}>坐这里</button>}
+                    </div>
+                  );
+                }
+                return (
+                  <div className="player-row" key={member.id}>
+                    <div className="player-avatar dz-member-avatar" style={{ background: seatColor(teamOf(seat)) } as CSSProperties}>
+                      <span>{member.name.slice(0, 1).toUpperCase()}</span>
+                    </div>
+                    <div className="player-details">
+                      <strong>{member.name}{member.id === socket.id ? <small>你</small> : null}</strong>
+                      <span>{team}{mine && mine.seat !== seat && (mine.seat + 3) % 6 === seat ? " · 你的对头" : mine && mine.seat !== seat && teamOf(mine.seat) === teamOf(seat) ? " · 你的队友" : ""}</span>
+                    </div>
+                    {member.isHost && <span className="host-badge">房主</span>}
+                    {isHost && !member.isHost && (
+                      <button className="kick-button" type="button" onClick={() => onKick(member.id)} title={`把 ${member.name} 移出房间`}>移出</button>
+                    )}
                   </div>
-                  <div className="player-details">
-                    <strong>{member.name}{member.id === socket.id ? <small>你</small> : null}</strong>
-                    <span>{member.isHost ? "房主" : "已加入"}</span>
-                  </div>
-                  {member.isHost && <span className="host-badge">房主</span>}
-                  {isHost && !member.isHost && (
-                    <button className="kick-button" type="button" onClick={() => onKick(member.id)} title={`把 ${member.name} 移出房间`}>移出</button>
-                  )}
-                </div>
-              ))}
-              {Array.from({ length: openSeats }, (_, index) => (
-                <div className="player-row open-seat" key={`open-${index}`}>
-                  <div className="empty-avatar"><span>＋</span></div>
-                  <div className="player-details"><strong>空座：人机补位</strong><span>{room.access.open ? "公开房间，路过的人也能坐下" : "朋友用房间码加入就会坐这里"}</span></div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <p className="field-hint">
-              打 {room.options.hands} 盘，累计积分最高的人获胜。{room.options.mingpai ? "明牌开始 5 秒、" : ""}叫抢 10 秒、{room.options.doubling ? "加倍 10 秒、" : ""}出牌 25 秒，超时自动处理（引牌出最小的单张，跟牌不出）；连续超时 2 次转托管（人机替你打），掉线由人机代打，回来能接上。
+              选座就是选队：甲 0、2、4，乙 1、3、5，正对面是对头。打 {room.options.hands} 盘，累计分高的联邦获胜。出牌 30 秒（让牌后再表态 15 秒）、吃免贡 10 秒、还贡 20 秒、革命 10 秒，超时自动处理（发牌出最小的一张、接牌过）；连续超时 2 次转托管（人机替你打），掉线 3 秒后人机代打，用原昵称回来能接上。
             </p>
             <RoomSettingsPanel room={room} />
             <SeatSwitch room={room} />

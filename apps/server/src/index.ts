@@ -6,18 +6,25 @@ import { pathToFileURL } from "node:url";
 import { Server } from "socket.io";
 import {
   applyCommand,
+  botBurn,
   botCommand,
+  burnEligibleSeats,
+  burnWindowKey,
   createGame,
   DEFAULT_OPTIONS,
   DEFAULT_ROOM_ACCESS,
   pendingSeats,
   redactGameForViewer,
   SEAT_COUNT,
+  spectatorView,
   stepSeconds,
+  tickBurnWindow,
   timeoutTurn,
   timerKey,
+  topKey,
   scoreOf,
   type ClientToServerEvents,
+  type GameCommand,
   type GameOptions,
   type IceServerConfig,
   type CreateRoomPayload,
@@ -66,6 +73,18 @@ interface RoomState {
   botTimers: Map<string, ReturnType<typeof setTimeout>>;
   /** 这个决定点里每个还没决定的真人座位的截止时间。 */
   seatDeadlines: Map<number, number>;
+  /** 烧牌窗口（有头的人打出的够级牌）：满 BURN_WINDOW_MS 时发 TICK。 */
+  windowKey?: string;
+  windowTimer?: ReturnType<typeof setTimeout>;
+  /** 人机（含托管、离线代打）对每套可能被烧的牌只考虑一次烧不烧，按「桌面牌#座位」区分。 */
+  burnTimers: Map<string, ReturnType<typeof setTimeout>>;
+  burnDecided: Set<string>;
+  /** 这一场的操作序列（座位、操作），和种子一起写进 logs/games.jsonl，同一种子重放就能复现。 */
+  actions: { seat: number; command: GameCommand | { type: "TIMEOUT"; seats: number[] } | { type: "TICK" } }[];
+  /** 这一场的种子（只在服务端）。 */
+  gameSeed?: number;
+  /** 每个连接上一次收到的房间快照（去掉倒计时），没变化就不重发：烧牌窗口里先收下的动作不能让别人察觉到任何动静。 */
+  lastSent: Map<string, string>;
 }
 
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -82,11 +101,19 @@ const MAX_SPECTATORS = 20;
 const TURN_MS_OVERRIDE = process.env.TURN_MS ? Number(process.env.TURN_MS) : undefined;
 /** 离线的人由机器人代打，先等 3 秒（全站统一；不算超时），回来能接上。 */
 const OFFLINE_TURN_MS = Number(process.env.OFFLINE_TURN_MS ?? 3_000);
-/** 机器人每个决定的随机延迟：0.6–1.6 秒，像个人在想。 */
+/** 人机每个决定的随机延迟：0.6–1.6 秒，像个人在想。BOT_DELAY_SCALE=0 时立刻出手（测试用）。 */
+const BOT_DELAY_SCALE = Number(process.env.BOT_DELAY_SCALE ?? 1);
 const BOT_MIN_MS = Number(process.env.BOT_MIN_MS ?? 600);
 const BOT_MAX_MS = Number(process.env.BOT_MAX_MS ?? 1_600);
+/** 人机按「烧牌」的时刻：够级牌打出后 0.4–1.6 秒里随机（补充文件 1.7），不要每次卡同一个时间点。 */
+const BURN_MIN_MS = Number(process.env.BURN_MIN_MS ?? 400);
+const BURN_MAX_MS = Number(process.env.BURN_MAX_MS ?? 1_600);
+/** 烧牌窗口：有头的人打出够级牌后，出牌 / 过牌生效 / 本轮结束都等满这么久（规则默认 2 秒，测试可以用环境变量缩短）。 */
+const BURN_WINDOW_MS_OVERRIDE = process.env.BURN_WINDOW_MS ? Number(process.env.BURN_WINDOW_MS) : undefined;
 /** 空座位人机的名字（全站统一：咕噜一号、二号……，显示时带「人机」标签）。 */
-const BOT_NAMES = ["咕噜一号", "咕噜二号", "咕噜三号", "咕噜四号"];
+const BOT_NAMES = ["咕噜一号", "咕噜二号", "咕噜三号", "咕噜四号", "咕噜五号", "咕噜六号"];
+/** 进房间时自动分配座位的顺序：两个人先坐正对面（0 甲、3 乙），之后每多两个人两队各加一个（规则书 8.2 建议每队至少 1 个真人）。 */
+const SEAT_ORDER = [0, 3, 1, 4, 2, 5] as const;
 /** 每局结束后把种子和动作序列追加到这里，便于复盘。 */
 const GAME_LOG = process.env.GAME_LOG ?? resolve(process.cwd(), "logs/games.jsonl");
 const TURN_CREDENTIAL_TTL_SECONDS = 24 * 60 * 60;
@@ -171,14 +198,17 @@ function normalizeOptions(value: unknown): GameOptions | null {
     return allowed.includes(raw as T) ? (raw as T) : undefined;
   };
   const flags = [true, false] as const;
-  const base = pick("base", [1, 2, 5] as const, DEFAULT_OPTIONS.base);
-  const hands = pick("hands", [3, 6, 9, 12] as const, DEFAULT_OPTIONS.hands);
-  const mingpai = pick("mingpai", flags, DEFAULT_OPTIONS.mingpai);
-  const doubling = pick("doubling", flags, DEFAULT_OPTIONS.doubling);
-  const superDouble = pick("superDouble", flags, DEFAULT_OPTIONS.superDouble);
-  const tracker = pick("tracker", flags, DEFAULT_OPTIONS.tracker);
-  if (base === undefined || hands === undefined || mingpai === undefined || doubling === undefined || superDouble === undefined || tracker === undefined) return null;
-  return { base, hands, mingpai, doubling, superDouble: doubling && superDouble, tracker };
+  const hands = pick("hands", [1, 3, 5, 8] as const, DEFAULT_OPTIONS.hands);
+  const tribute = pick("tribute", flags, DEFAULT_OPTIONS.tribute);
+  const rang = pick("rang", flags, DEFAULT_OPTIONS.rang);
+  const peek = pick("peek", flags, DEFAULT_OPTIONS.peek);
+  if (hands === undefined || tribute === undefined || rang === undefined || peek === undefined) return null;
+  return { hands, tribute, rang, peek };
+}
+
+/** 等候房间里第一个空座位（按 SEAT_ORDER）。 */
+function freeSeat(room: RoomState): number | undefined {
+  return SEAT_ORDER.find((seat) => !room.members.some((member) => member.seat === seat));
 }
 
 function generateRoomCode(): string {
@@ -200,33 +230,21 @@ function snapshot(room: RoomState, viewerId: string): LobbyRoomSnapshot {
     voice: [...room.voice].map(([id, state]) => ({ id, muted: state.muted })),
     ...(countdownFor(room, viewerId) !== undefined ? { turnRemainingMs: Math.max(0, countdownFor(room, viewerId)! - Date.now()) } : {}),
     ...(room.rematch ? { rematch: { remainingMs: Math.max(0, room.rematch.deadline - Date.now()), acceptedIds: [...room.rematch.accepted] } } : {}),
-    ...(room.game ? { game: seated ? redactGameForViewer(room.game, seatOf(room, viewerId)) : spectatorGame(room) } : {}),
+    ...(room.game ? { game: seated ? redactGameForViewer(room.game, seatOf(room, viewerId)) : spectatorView(room.game, room.access.spectatorsSeeAll) } : {}),
   };
 }
 
-/** 这位观看者看到的倒计时（截止时间）：自己要做决定就是自己的；轮到别人时是那个人的；同时决定的阶段是还没选的人的。 */
-function countdownFor(room: RoomState, viewerId: string): number | undefined {
-  const game = room.game;
-  if (!room.turn || !game) return undefined;
-  const seat = game.players.findIndex((player) => player.id === seatOf(room, viewerId));
-  if (room.seatDeadlines.has(seat)) return room.seatDeadlines.get(seat);
-  if (game.turn >= 0 && room.seatDeadlines.has(game.turn)) return room.seatDeadlines.get(game.turn);
-  if (game.turn < 0 && room.seatDeadlines.size > 0) return Math.min(...room.seatDeadlines.values());
-  return undefined;
-}
-
 /**
- * 观战的人看到的对局：默认和不在座的人一样只有公开信息；房主打开「看手牌」后，
- * 每位玩家的部分换成他自己看到的样子（手牌可见），其余按当前行动者的视角。牌堆顺序、种子始终去掉。
+ * 这位观看者看到的倒计时（截止时间）：出牌阶段是轮到的那个真人的（人机、托管、离线的人不显示）；
+ * 同时决定的阶段（进贡、还贡、革命、结算）大家看到同一个阶段截止时间——不按「谁还没选」显示，免得暴露谁能革命。
+ * 轮到的人在烧牌窗口里先选好了动作，倒计时照常显示，别人看不出他已经选了。
  */
-function spectatorGame(room: RoomState): GameState {
-  const game = room.game!;
-  if (!room.access.spectatorsSeeAll) return redactGameForViewer(game, "");
-  const base = redactGameForViewer(game, game.players[game.turn]?.id ?? "");
-  return {
-    ...base,
-    players: game.players.map((player) => redactGameForViewer(game, player.id).players.find((candidate) => candidate.id === player.id)!),
-  } as GameState;
+function countdownFor(room: RoomState, _viewerId: string): number | undefined {
+  const game = room.game;
+  if (!game || game.phase === "finished") return undefined;
+  const deadline = room.stageStartedAt + stepMs(game);
+  if (game.stage === "playing") return game.turn >= 0 && !robotSeat(room, game.turn) ? deadline : undefined;
+  return room.seatDeadlines.size > 0 || pendingSeats(game).length > 0 ? deadline : undefined;
 }
 
 function isSpectator(room: RoomState, socketId: string): boolean {
@@ -261,6 +279,7 @@ function roomSummaries(): PublicRoomSummary[] {
             name: member.name,
             isHost: member.isHost,
             connected: member.connected,
+            seat: member.seat,
             ...(player ? {
               score: scoreOf(game!, game!.players.findIndex((candidate) => candidate.id === player.id)),
               isActive: game!.phase !== "finished" && game!.players[game!.turn]?.id === player.id,
@@ -306,12 +325,26 @@ function emitLobbyUpdate(): void {
   lobbyUpdateTimer.unref();
 }
 
+/** 快照里随时间变的部分（倒计时）不算「有变化」。 */
+function snapshotKey(snap: LobbyRoomSnapshot): string {
+  const { turnRemainingMs: _remaining, rematch, ...rest } = snap;
+  return JSON.stringify({ ...rest, rematch: rematch ? { acceptedIds: rematch.acceptedIds } : null });
+}
+
+/** 发给一个连接；和上次发给它的一样就不发（force 为 true 时总是发，比如刚进房间）。 */
+function sendSnapshot(room: RoomState, socketId: string, force = false): void {
+  const snap = snapshot(room, socketId);
+  const key = snapshotKey(snap);
+  if (!force && room.lastSent.get(socketId) === key) return;
+  room.lastSent.set(socketId, key);
+  io.to(socketId).emit("room:updated", snap);
+}
+
 function emitRoomUpdate(room: RoomState): void {
-  // 每位成员单独发送（各自的座位视角）。
-  for (const member of room.members) {
-    io.to(member.id).emit("room:updated", snapshot(room, member.id));
-  }
-  for (const spectator of room.spectators) io.to(spectator.id).emit("room:updated", snapshot(room, spectator.id));
+  // 每位成员单独发送（各自的座位视角）；看到的东西没变的人不发——烧牌窗口里有人先按了烧牌或先选了动作，
+  // 别人连「收到一条更新」这样的动静都不能有。
+  for (const member of room.members) sendSnapshot(room, member.id);
+  for (const spectator of room.spectators) sendSnapshot(room, spectator.id);
   emitLobbyUpdate();
 }
 
@@ -325,6 +358,7 @@ function removeWaitingMember(socketId: string): void {
   if (!code) return;
   socketRooms.delete(socketId);
   rooms.get(code)?.voice.delete(socketId);
+  rooms.get(code)?.lastSent.delete(socketId);
 
   const room = rooms.get(code);
   if (!room) return;
@@ -433,8 +467,22 @@ function clearGameTimers(room: RoomState): void {
   clearTurnTimer(room);
   for (const timer of room.botTimers.values()) clearTimeout(timer);
   room.botTimers.clear();
+  for (const timer of room.burnTimers.values()) clearTimeout(timer);
+  room.burnTimers.clear();
+  room.burnDecided.clear();
+  clearTimeout(room.windowTimer);
+  delete room.windowTimer;
+  delete room.windowKey;
   delete room.stageKey;
 }
+
+/** 执行一个操作并记进这一场的操作序列。 */
+function applyAndLog(room: RoomState, seat: number, playerId: string, command: GameCommand): void {
+  room.game = applyCommand(room.game!, playerId, command);
+  room.actions.push({ seat, command });
+}
+
+const botDelay = (min: number, max: number) => (min + Math.random() * (max - min)) * BOT_DELAY_SCALE;
 
 function setTurnDeadline(room: RoomState, deadline: number, key: string): void {
   clearTurnTimer(room);
@@ -490,11 +538,77 @@ function updateTurnTimer(room: RoomState): void {
     const timerId = `${key}#${seat}`;
     if (room.botTimers.has(timerId)) continue;
     const player = game.players[seat]!;
-    const delay = player.bot || player.auto ? BOT_MIN_MS + Math.random() * (BOT_MAX_MS - BOT_MIN_MS) : OFFLINE_TURN_MS;
+    const delay = player.bot || player.auto ? botDelay(BOT_MIN_MS, BOT_MAX_MS) : OFFLINE_TURN_MS;
     const timer = setTimeout(() => runRobot(room, seat, key, timerId), delay);
     timer.unref();
     room.botTimers.set(timerId, timer);
   }
+  scheduleBurnWindow(room, game);
+  scheduleBotBurns(room, game);
+}
+
+/** 有头的人打出够级牌：满烧牌窗口时发 TICK（不管有没有人能烧，时间都一样）。 */
+function scheduleBurnWindow(room: RoomState, game: GameState): void {
+  const key = burnWindowKey(game);
+  if (key === (room.windowKey ?? null)) return;
+  clearTimeout(room.windowTimer);
+  delete room.windowTimer;
+  delete room.windowKey;
+  if (!key) return;
+  room.windowKey = key;
+  const timer = setTimeout(() => tickWindow(room, key), BURN_WINDOW_MS_OVERRIDE ?? game.config.burnWindowMs);
+  timer.unref();
+  room.windowTimer = timer;
+}
+
+function tickWindow(room: RoomState, key: string): void {
+  if (rooms.get(room.code) !== room || !room.game || burnWindowKey(room.game) !== key) return;
+  delete room.windowTimer;
+  room.game = tickBurnWindow(room.game);
+  room.actions.push({ seat: -1, command: { type: "TICK" } });
+  afterGameChange(room);
+  emitRoomUpdate(room);
+}
+
+/** 人机座位（空座、托管、离线的人）能烧时，随机等 0.4–1.6 秒问一次人机烧不烧；每套桌面牌只问一次。 */
+function scheduleBotBurns(room: RoomState, game: GameState): void {
+  const top = topKey(game);
+  for (const [timerId, timer] of room.burnTimers) {
+    if (!timerId.startsWith(`${top}#`)) {
+      clearTimeout(timer);
+      room.burnTimers.delete(timerId);
+    }
+  }
+  for (const decided of room.burnDecided) if (!decided.startsWith(`${top}#`)) room.burnDecided.delete(decided);
+  if (!top) return;
+  for (const seat of burnEligibleSeats(game)) {
+    if (!robotSeat(room, seat)) continue;
+    const timerId = `${top}#${seat}`;
+    if (room.burnTimers.has(timerId) || room.burnDecided.has(timerId)) continue;
+    const timer = setTimeout(() => runBotBurn(room, seat, top, timerId), botDelay(BURN_MIN_MS, BURN_MAX_MS));
+    timer.unref();
+    room.burnTimers.set(timerId, timer);
+  }
+}
+
+function runBotBurn(room: RoomState, seat: number, top: string, timerId: string): void {
+  room.burnTimers.delete(timerId);
+  room.burnDecided.add(timerId);
+  const game = room.game;
+  if (rooms.get(room.code) !== room || !game || topKey(game) !== top || !robotSeat(room, seat) || !burnEligibleSeats(game).includes(seat)) return;
+  const id = game.players[seat]!.id;
+  let command: GameCommand | null = null;
+  try {
+    // 人机只看这个座位自己能看到的信息（烧牌候选在 you 里）
+    command = botBurn(redactGameForViewer(game, id), seat);
+    if (command) applyAndLog(room, seat, id, command);
+  } catch (error) {
+    console.error("人机烧牌出错", error);
+    return;
+  }
+  if (!command) return;
+  afterGameChange(room);
+  emitRoomUpdate(room);
 }
 
 const stepMs = (game: GameState) => TURN_MS_OVERRIDE ?? stepSeconds(game) * 1000;
@@ -509,12 +623,13 @@ function runRobot(room: RoomState, seat: number, key: string, timerId: string): 
   if (rooms.get(room.code) !== room || !game || game.phase === "finished" || timerKey(game) !== key) return;
   if (!pendingSeats(game).includes(seat) || !robotSeat(room, seat)) return;
   try {
-    // 机器人只看这个座位自己能看到的信息
+    // 人机只看这个座位自己能看到的信息
     const id = game.players[seat]!.id;
-    room.game = applyCommand(game, id, botCommand(redactGameForViewer(game, id), seat));
+    applyAndLog(room, seat, id, botCommand(redactGameForViewer(game, id), seat));
   } catch (error) {
-    console.error("机器人出错", error);
-    room.game = timeoutTurn(game);
+    console.error("人机出错", error);
+    room.game = timeoutTurn(game, [seat]);
+    room.actions.push({ seat: -1, command: { type: "TIMEOUT", seats: [seat] } });
   }
   afterGameChange(room);
   emitRoomUpdate(room);
@@ -525,7 +640,10 @@ function expireTurn(room: RoomState): void {
   const now = Date.now() + 30;
   const due = [...room.seatDeadlines].filter(([, deadline]) => deadline <= now).map(([seat]) => seat);
   // 只超时到点的真人座位；机器人座位由自己的计时出手。
-  if (due.length > 0) room.game = timeoutTurn(room.game, due);
+  if (due.length > 0) {
+    room.game = timeoutTurn(room.game, due);
+    room.actions.push({ seat: -1, command: { type: "TIMEOUT", seats: due } });
+  }
   afterGameChange(room);
   emitRoomUpdate(room);
 }
@@ -535,32 +653,42 @@ function afterGameChange(room: RoomState): void {
   if (room.game?.phase === "finished") {
     clearGameTimers(room);
     room.chat = [];
-    void logFinishedGame(room.game);
+    void logFinishedGame(room, room.game);
     startRematchVote(room);
     return;
   }
   updateTurnTimer(room);
 }
 
-/** 种子用服务端的安全随机数生成；牌在服务端洗，不发给浏览器。 */
-/** 真人坐前面的座位，空座由机器人补满 3 个（createGame 里再随机排座位）。 */
+/**
+ * 种子用服务端的安全随机数生成；牌在服务端洗，不发给浏览器。
+ * 真人按自己选的座位坐（选座就是选队），空座由人机（咕噜一号、二号……）补满 6 个。
+ */
 function newGame(room: RoomState, seed = randomInt(2 ** 32 - 1)): GameState {
-  const humans = room.members.map((member) => ({ id: member.playerId, name: member.name }));
-  const names = BOT_NAMES.filter((name) => !humans.some((human) => human.name === name));
-  const bots = Array.from({ length: SEAT_COUNT - humans.length }, (_, k) => ({ id: `bot${k + 1}`, name: names[k]!, bot: true }));
-  return createGame([...humans, ...bots], seed, room.options);
+  const names = BOT_NAMES.filter((name) => !room.members.some((member) => member.name === name));
+  let botIndex = 0;
+  const players = Array.from({ length: SEAT_COUNT }, (_, seat) => {
+    const member = room.members.find((candidate) => candidate.seat === seat);
+    if (member) return { id: member.playerId, name: member.name };
+    return { id: `bot${seat}`, name: names[botIndex++]!, bot: true };
+  });
+  room.actions = [];
+  room.lastSent.clear();
+  room.gameSeed = seed;
+  return createGame(players, seed, room.options);
 }
 
 /** 记录一局的种子、玩家和动作序列，同一种子重放这串动作就能复现整局。 */
-async function logFinishedGame(game: GameState): Promise<void> {
+async function logFinishedGame(room: RoomState, game: GameState): Promise<void> {
   try {
     await mkdir(dirname(GAME_LOG), { recursive: true });
     const entry = {
       endedAt: new Date().toISOString(),
-      seed: game.seed,
+      seed: room.gameSeed ?? game.seed,
       options: game.config,
       players: game.players.map((player, seat) => ({ id: player.id, name: player.name, bot: player.bot, score: scoreOf(game, seat) })),
-      log: game.log,
+      teamScores: game.teamScores,
+      actions: room.actions,
     };
     await appendFile(GAME_LOG, JSON.stringify(entry) + "\n");
   } catch (error) {
@@ -629,6 +757,7 @@ function isVoiceSignal(value: unknown): value is VoiceSignal {
 /** 把离线玩家的座位交给新的连接，保留其对局状态。 */
 function reassignMember(room: RoomState, previousId: string, nextId: string): void {
   const swap = (id: string) => (id === previousId ? nextId : id);
+  room.lastSent.delete(previousId);
   room.members = room.members.map((member) =>
     member.id === previousId ? { ...member, id: nextId, connected: true } : member,
   );
@@ -699,9 +828,13 @@ io.on("connection", (socket) => {
       stageStartedAt: Date.now(),
       botTimers: new Map(),
       seatDeadlines: new Map(),
+      burnTimers: new Map(),
+      burnDecided: new Set(),
+      actions: [],
+      lastSent: new Map(),
       status: "waiting",
       ownerId: socket.id,
-      members: [{ id: socket.id, playerId: "p1", name: normalizeName(payload.name)!, isHost: true, connected: true }],
+      members: [{ id: socket.id, playerId: "p1", name: normalizeName(payload.name)!, isHost: true, connected: true, seat: SEAT_ORDER[0] }],
       nextSeat: 2,
       spectators: [],
       invited: new Set(),
@@ -815,6 +948,7 @@ io.on("connection", (socket) => {
       name,
       isHost: false,
       connected: true,
+      seat: freeSeat(room)!,
     };
     room.members.push(member);
     socketRooms.set(socket.id, code);
@@ -890,7 +1024,7 @@ io.on("connection", (socket) => {
     }
     room.spectators = room.spectators.filter((candidate) => candidate.id !== socket.id);
     room.invited.delete(socket.id);
-    room.members.push({ id: socket.id, playerId: `p${room.nextSeat++}`, name: spectator.name, isHost: false, connected: true });
+    room.members.push({ id: socket.id, playerId: `p${room.nextSeat++}`, name: spectator.name, isHost: false, connected: true, seat: freeSeat(room)! });
     ack({ ok: true, data: undefined });
     emitRoomUpdate(room);
   });
@@ -918,6 +1052,51 @@ io.on("connection", (socket) => {
     room.voice.delete(socket.id);
     room.spectators.push({ id: socket.id, name: member.name });
     room.invited.add(socket.id);
+    ack({ ok: true, data: undefined });
+    emitRoomUpdate(room);
+  });
+
+  socket.on("room:seat", (seat, ack) => {
+    const room = findRoomForSocket(socket.id);
+    const member = room?.members.find((candidate) => candidate.id === socket.id);
+    if (!room || !member) {
+      ack({ ok: false, error: "你当前不在座位上。" });
+      return;
+    }
+    if (room.status !== "waiting") {
+      ack({ ok: false, error: "对局开始后不能换座位。" });
+      return;
+    }
+    if (!Number.isInteger(seat) || seat < 0 || seat >= SEAT_COUNT) {
+      ack({ ok: false, error: "没有这个座位。" });
+      return;
+    }
+    if (room.members.some((candidate) => candidate.seat === seat && candidate.id !== socket.id)) {
+      ack({ ok: false, error: "这个座位已经有人了。" });
+      return;
+    }
+    room.members = room.members.map((candidate) => (candidate.id === socket.id ? { ...candidate, seat } : candidate));
+    ack({ ok: true, data: undefined });
+    emitRoomUpdate(room);
+  });
+
+  socket.on("room:swap-seats", (payload, ack) => {
+    const room = findRoomForSocket(socket.id);
+    if (!room || room.ownerId !== socket.id) {
+      ack({ ok: false, error: "只有房主可以调换座位。" });
+      return;
+    }
+    if (room.status !== "waiting") {
+      ack({ ok: false, error: "对局开始后不能换座位。" });
+      return;
+    }
+    const a = payload?.a;
+    const b = payload?.b;
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0 || a >= SEAT_COUNT || b >= SEAT_COUNT || a === b) {
+      ack({ ok: false, error: "座位不对。" });
+      return;
+    }
+    room.members = room.members.map((member) => (member.seat === a ? { ...member, seat: b } : member.seat === b ? { ...member, seat: a } : member));
     ack({ ok: true, data: undefined });
     emitRoomUpdate(room);
   });
@@ -978,7 +1157,8 @@ io.on("connection", (socket) => {
     }
 
     try {
-      room.game = applyCommand(room.game, seatOf(room, socket.id), command);
+      const playerId = seatOf(room, socket.id);
+      applyAndLog(room, room.game.players.findIndex((player) => player.id === playerId), playerId, command);
       afterGameChange(room);
       const roomSnapshot = snapshot(room, socket.id);
       ack({ ok: true, data: roomSnapshot });
@@ -1186,6 +1366,26 @@ export const testHooks = {
     const room = rooms.get(code);
     if (!room) throw new Error("no room");
     expireTurn(room);
+  },
+  /** 换成指定的局面（预览局面工厂造的，玩家 id 要和房间里的对上），用来测特定情形。 */
+  setGame(code: string, game: GameState): void {
+    const room = rooms.get(code);
+    if (!room) throw new Error("no room");
+    clearGameTimers(room);
+    room.game = game;
+    room.status = "playing";
+    updateTurnTimer(room);
+    emitRoomUpdate(room);
+  },
+  /** 这一场的操作序列（复盘测试用）。 */
+  actions(code: string) {
+    const room = rooms.get(code);
+    if (!room) throw new Error("no room");
+    return { seed: room.gameSeed, actions: room.actions };
+  },
+  /** 当前局面（服务器上的完整状态，测试核对用）。 */
+  game(code: string): GameState | undefined {
+    return rooms.get(code)?.game;
   },
 };
 

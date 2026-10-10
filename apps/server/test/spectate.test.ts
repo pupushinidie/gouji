@@ -21,11 +21,11 @@ const CAPACITY = SEAT_COUNT;
 const HIDDEN_INFO = true;
 /** 开局后先走几步（每步选轮到的人的第一个合法动作），让场上有藏起来的牌。 */
 const STEPS = 4;
-/** 只在服务端的字段（牌堆顺序、种子等），观战的人永远拿不到。 */
-const SERVER_ONLY = ["wall", "seed", "rng", "log"];
-/** 这份状态里看得到几样藏起来的东西（手牌之类）。 */
+/** 只在服务端的字段（种子、随机数状态等），观战的人永远拿不到。 */
+const SERVER_ONLY = ["seed", "rng", "log", "revolutionHand"];
+/** 这份状态里看得到几样藏起来的东西（手牌、烧牌候选之类）。 */
 function secretsSeen(game: GameState): number {
-  return game.players.reduce((total, player) => total + player.hand.length, 0);
+  return game.players.reduce((total, player) => total + player.hand.length, 0) + (game.you?.burnCandidates.length ?? 0);
 }
 // ----------------------------------------
 
@@ -55,7 +55,7 @@ function nick(prefix: string): string {
 }
 
 function create(client: TestSocket, name: string): Promise<LobbyRoomSnapshot> {
-  return new Promise((resolve, reject) => client.emit("room:create", { name, options: { mingpai: false } }, (response: AckResponse<LobbyRoomSnapshot>) => {
+  return new Promise((resolve, reject) => client.emit("room:create", { name, options: { hands: 1 } }, (response: AckResponse<LobbyRoomSnapshot>) => {
     if (response.ok) resolve(response.data);
     else reject(new Error(response.error));
   }));
@@ -202,7 +202,8 @@ describe("观战和公开房间", () => {
       const action = legalActions(latest.get(mover)!.game!, seatOf(mover))[0]!;
       const version = latest.get(viewer)!.game!.version;
       expect((await call<LobbyRoomSnapshot>((ack) => mover.emit("game:command", action, ack))).ok).toBe(true);
-      await updateWhere(viewer, (snapshot) => snapshot.game!.version !== version);
+      // 同时决定的阶段（革命、还贡）和烧牌窗口里先收下的动作别人看不到、观战也收不到更新，所以最多等一会儿
+      await Promise.race([updateWhere(viewer, (snapshot) => snapshot.game!.version !== version), delay(300)]);
       await delay(20);
     }
 
