@@ -378,14 +378,14 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     lesson: "计分",
     say: "头科 +4、二科 +2、三科四科 0、二落 −2、大落 −4，全队加起来。",
     note: "你方：你头科 +4、咕噜二号三科 0、咕噜四号二落 −2，合计 +2；每个人都记全队的分。",
-    anchor: "summary",
+    anchor: "summary-ribbons",
   },
   {
     id: "sweep",
     kind: "info",
     say: "一队包揽头科、二科、三科叫「串三户」：每人 ±12，这盘立刻结束。",
     note: "打满约定的盘数，累计分高的联邦赢。",
-    anchor: "summary",
+    anchor: "summary-ribbons",
     face: "surprised",
   },
   { id: "to-tribute", kind: "watch", say: "下一盘发完牌，先进贡。", moves: [scene("tribute")] },
@@ -485,7 +485,7 @@ export function anchorVisible(state: GoujiState, anchor: string, viewer = 0): bo
   if (anchor === "btn-burn") return (view.you?.burnCandidates.length ?? 0) > 0;
   if (anchor === "btn-return") return legal.some((command) => command.type === "RETURN");
   if (anchor === "tribute") return state.tribute !== null && (state.stage === "tribute" || state.stage === "return" || state.stage === "revolution") && state.tribute.items.length > 0;
-  if (anchor === "summary") return state.stage === "handEnd" && state.result !== null && state.phase === "playing";
+  if (anchor === "summary" || anchor === "summary-ribbons") return state.stage === "handEnd" && state.result !== null && state.phase === "playing";
   if (anchor === "play-me") return state.round?.entries.some((entry) => entry.seat === viewer) === true;
   const col = /^col-(\d+)$/.exec(anchor);
   if (col) return state.stage !== "handEnd" && me.hand.some((card) => rankOf(card) === Number(col[1]));

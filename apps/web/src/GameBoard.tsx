@@ -24,11 +24,14 @@ import {
   type TableEntry,
 } from "@gouji/game";
 import { art, coverSize, preloadArt, type StatusIcon } from "./art.js";
+import { Coach, TipToast } from "./tutorial/Coach.js";
+import { useFirstTimeTips } from "./tutorial/tips.js";
+import { detectTips, GAME_ID, hintFor, TIPS, type Hint } from "./tutorialGame.js";
 import { CardRow, preloadCards } from "./cards.js";
 import GameRules from "./GameRules.js";
 import Hand, { HAND_RANKS, isWildRank, picksOf, selectedCards, shortRank } from "./Hand.js";
 import { eventText, KIND_NAMES, signed } from "./log.js";
-import { GameRoomMenu, roomRole, SpectateBar } from "./RoomExtras.js";
+import { GameRoomMenu, SpectateBar } from "./RoomExtras.js";
 import { socket } from "./socket.js";
 import Sprite from "./Sprite.js";
 import { pickLayout, useBox, useCountdown } from "./table.js";
@@ -50,10 +53,16 @@ interface GameBoardProps {
   readonly watchId: string;
   readonly onWatch: (playerId: string) => void;
   readonly onLeave: () => void;
-  /** 教程：在操作行上方插一块（教练框由教程自己画）。 */
-  readonly coach?: ReactNode;
-  /** 教程 / 练习局：显示「提示」按钮。默认显示。 */
-  readonly showHint?: boolean;
+  /** 教程：自己在 room.members 里的 id（默认 socket.id）。 */
+  readonly selfMemberId?: string;
+  /** online 真实对局（默认）/ tutorial 剧本进行中（不出提示和小贴士）/ practice 练习局（随时能看提示）。 */
+  readonly mode?: "online" | "tutorial" | "practice";
+  /** 一场结束框里替代「再来一局」的按钮（练习局）。 */
+  readonly finalActions?: ReactNode;
+  /** 右栏比分下面多放一块（教程进度）。 */
+  readonly sidePanel?: ReactNode;
+  /** 选中的牌变了（教程跟着挪高亮）。 */
+  readonly onSelection?: (cards: readonly Card[]) => void;
 }
 
 type Fx =
@@ -85,11 +94,16 @@ export default function GameBoard({
   watchId,
   onWatch,
   onLeave,
-  coach,
-  showHint = true,
+  selfMemberId,
+  mode = "online",
+  finalActions,
+  sidePanel,
+  onSelection,
 }: GameBoardProps) {
   const game = room.game!;
-  const { isHost, spectating, member } = roomRole(room);
+  const member = room.members.find((candidate) => candidate.id === (selfMemberId ?? socket.id));
+  const spectating = !member;
+  const isHost = member?.isHost ?? false;
   const meId = member?.playerId ?? "";
   const mySeat = spectating ? -1 : game.players.findIndex((player) => player.id === meId);
   const watchSeat = Math.max(0, game.players.findIndex((player) => player.id === watchId));
@@ -182,6 +196,7 @@ export default function GameBoard({
     setHint("");
   };
 
+  useEffect(() => onSelection?.(chosen), [chosen.join()]);
   const chosenSet = chosen.length > 0 ? parseSet(chosen) : null;
   let playOk = false;
   let playNote = "";
@@ -198,6 +213,14 @@ export default function GameBoard({
       playOk = true;
       playNote = `${setLabel(chosenSet)}${chosenSet.gouji ? "（够级，只有对头能管）" : ""}`;
     }
+  } else if (game.stage === "playing" && mySeat >= 0 && top && game.players[mySeat]!.handCount !== 0 && game.revolutionary !== mySeat && !you?.pendingAction) {
+    // 不能接的时候写清楚为什么（新手最常问「我有大牌为什么不让我出」）
+    const owner = top.seat;
+    if (owner !== mySeat && top.set.gouji && !game.chaos && !game.headless[owner] && oppOf(owner) !== mySeat && !game.headless[mySeat]) {
+      playNote = `够级牌只有 ${nameOf(owner)} 的对头 ${nameOf(oppOf(owner))} 能管${(you?.burnCandidates.length ?? 0) > 0 ? "——但你能烧！" : ""}`;
+    } else if (owner !== mySeat && round?.passed.includes(mySeat) && !game.chaos && oppOf(owner) !== mySeat) {
+      playNote = "你这一轮过过牌，等下一轮（对头出的牌还能接）";
+    } else if (chosenSet) playNote = `已选 ${setLabel(chosenSet)}`;
   } else if (chosenSet && game.stage === "playing") playNote = `已选 ${setLabel(chosenSet)}`;
 
   // 接牌时用不上的点数变暗
@@ -214,13 +237,16 @@ export default function GameBoard({
     setHint("");
     onCommand(command);
   };
+  // 「提示」：只有自己和人机时（练习局，或一个人加人机开的房间）
+  const botsOnly = room.members.length === 1 && member !== undefined;
+  const [coachHint, setCoachHint] = useState<{ version: number; hint: Hint } | null>(null);
   const showHintFor = () => {
     if (mySeat < 0) return;
-    const decision = botHint(game, mySeat);
-    if (!decision) return;
-    const command = decision.command;
-    if (command.type === "PLAY" || command.type === "BURN" || command.type === "RETURN") setPicks(picksOf(command.cards, rankOf));
-    setHint(`提示：${decision.reason}`);
+    const next = hintFor(game, meId);
+    const command = next.command;
+    if (command && (command.type === "PLAY" || command.type === "BURN" || command.type === "RETURN")) setPicks(picksOf(command.cards, rankOf));
+    setHint(next.note ? `提示：${next.note}` : "");
+    setCoachHint({ version: game.version, hint: next });
   };
 
   // ---------- 特效 ----------
@@ -320,6 +346,18 @@ export default function GameBoard({
   else if (turnSeat >= 0) headline = top ? `等 ${nameOf(turnSeat)} 接牌` : `等 ${nameOf(turnSeat)} 发牌`;
   else if (waitingWindow) headline = "够级牌：等 2 秒，看有没有人烧";
   const myAction = myTurn || tributeMine || (returnItem !== null) || (game.stage === "revolution" && !choiceDone && mySeat >= 0);
+  const canHint = !spectating && !me?.auto && (myAction || (you?.burnCandidates.length ?? 0) > 0) && (mode === "practice" || (mode === "online" && botsOnly));
+  const shownHint = coachHint && coachHint.version === game.version && canHint ? coachHint.hint : null;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && /INPUT|TEXTAREA/.test(target.tagName)) return;
+      if (event.key === "h" || event.key === "H") { if (canHint) showHintFor(); }
+      else if (event.key === "Escape") clear();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   // 页面在后台时标题提示
   useEffect(() => {
@@ -346,6 +384,10 @@ export default function GameBoard({
     if (chatOpen) setSeenChat(room.chat.length);
   }, [chatOpen, room.chat.length]);
   const unread = Math.max(0, room.chat.length - seenChat);
+
+  const tips = useFirstTimeTips(GAME_ID, game.version, () => detectTips(game, meId), TIPS, mode === "online" && !spectating);
+
+  const [tableOpen, setTableOpen] = useState(false);
 
   // ---------- 结算弹窗 ----------
   const [hideSummary, setHideSummary] = useState(false);
@@ -465,6 +507,12 @@ export default function GameBoard({
       {banner.text}
     </div>
   );
+  const goujiTable = (game.stage === "playing" || game.stage === "revolution") && (
+    <span className={tableOpen ? "gj-gtable open" : "gj-gtable"}>
+      <button type="button" data-tutorial="gouji-table" aria-expanded={tableOpen} onClick={() => setTableOpen(!tableOpen)} title="够级牌的门槛">够级表</button>
+      {tableOpen && <span className="gj-gtable-body">10×5 · J×4 · Q×3 · K×2 · A×2 · 单张 2 · 带王的牌</span>}
+    </span>
+  );
   const centerInfo = (
     <div className="gj-center" data-tutorial="center">
       {!mobile && bannerNode}
@@ -487,6 +535,7 @@ export default function GameBoard({
         </>
       )}
       {game.stage === "revolution" && <span className="gj-top-label"><small>每盘都有</small>革命表态中</span>}
+      {goujiTable}
     </div>
   );
 
@@ -518,18 +567,18 @@ export default function GameBoard({
   const buttons: ReactNode[] = [];
   if (!spectating && me && playing) {
     if (game.stage === "tribute" && tributeMine) {
-      buttons.push(<button key="eat" className="primary-button gj-btn" type="button" disabled={busy} onClick={() => send({ type: "TRIBUTE", eat: true })}>吃贡</button>);
-      buttons.push(<button key="skip" className="quiet-button gj-btn" type="button" disabled={busy} onClick={() => send({ type: "TRIBUTE", eat: false })}>免贡</button>);
+      buttons.push(<button key="eat" className="primary-button gj-btn" type="button" data-tutorial="btn-eat" disabled={busy} onClick={() => send({ type: "TRIBUTE", eat: true })}>吃贡</button>);
+      buttons.push(<button key="skip" className="quiet-button gj-btn" type="button" data-tutorial="btn-skip" disabled={busy} onClick={() => send({ type: "TRIBUTE", eat: false })}>免贡</button>);
     }
     if (returnItem) {
       const ok = chosen.length === returnItem.cards.length;
-      buttons.push(<button key="ret" className="primary-button gj-btn" type="button" disabled={busy || !ok} onClick={() => send({ type: "RETURN", cards: chosen })}>还这 {returnItem.cards.length} 张</button>);
+      buttons.push(<button key="ret" className="primary-button gj-btn" type="button" data-tutorial="btn-return" disabled={busy || !ok} onClick={() => send({ type: "RETURN", cards: chosen })}>还这 {returnItem.cards.length} 张</button>);
     }
     if (game.stage === "revolution" && !choiceDone) {
       if (you?.canRevolt) {
-        buttons.push(<button key="rev" className="primary-button gj-btn" type="button" disabled={busy} onClick={() => send({ type: "REVOLT", revolt: true })}>革命</button>);
-        buttons.push(<button key="norev" className="quiet-button gj-btn" type="button" disabled={busy} onClick={() => send({ type: "REVOLT", revolt: false })}>不革命</button>);
-      } else buttons.push(<button key="cont" className="primary-button gj-btn" type="button" disabled={busy} onClick={() => send({ type: "REVOLT", revolt: false })}>继续</button>);
+        buttons.push(<button key="rev" className="primary-button gj-btn" type="button" data-tutorial="btn-revolt" disabled={busy} onClick={() => send({ type: "REVOLT", revolt: true })}>革命</button>);
+        buttons.push(<button key="norev" className="quiet-button gj-btn" type="button" data-tutorial="btn-continue" disabled={busy} onClick={() => send({ type: "REVOLT", revolt: false })}>不革命</button>);
+      } else buttons.push(<button key="cont" className="primary-button gj-btn" type="button" data-tutorial="btn-continue" disabled={busy} onClick={() => send({ type: "REVOLT", revolt: false })}>继续</button>);
     }
     if (myTurn) {
       buttons.push(<button key="play" className="primary-button gj-btn" type="button" data-tutorial="btn-play" disabled={busy || !playOk} onClick={() => send({ type: "PLAY", cards: chosen })}>{top ? "压上" : "出牌"}</button>);
@@ -543,7 +592,7 @@ export default function GameBoard({
         </button>,
       );
     }
-    if (showHint && (myTurn || returnItem || burnOptions.length > 0)) buttons.push(<button key="hint" className="quiet-button gj-btn small" type="button" data-tutorial="btn-hint" onClick={showHintFor}>提示</button>);
+    if (canHint) buttons.push(<button key="hint" className="quiet-button gj-btn small" type="button" data-tutorial="btn-hint" onClick={showHintFor}>提示</button>);
   }
 
   const selectionTools = myTurn && naturalPicked !== undefined && (
@@ -595,7 +644,7 @@ export default function GameBoard({
           <b>{signed(game.teamScores[team])}</b>
         </div>
       ))}
-      {!spectating && me && playing && game.stage !== "handEnd" && (
+      {!spectating && me && playing && game.stage !== "handEnd" && mode === "online" && (
         <button className="quiet-button" type="button" onClick={() => send({ type: "AUTO", on: !me.auto })}>{me.auto ? "取消托管" : "托管（人机代打）"}</button>
       )}
     </section>
@@ -615,6 +664,7 @@ export default function GameBoard({
     <aside className={["gjs-side", wide && !mobile ? "docked" : "drawer", drawer ? "open" : ""].filter(Boolean).join(" ")}>
       {spectating && <SpectateBar room={room} watchId={game.players[viewSeat]!.id} onWatch={onWatch} onLeave={onLeave} />}
       {scorePanel}
+      {sidePanel}
       {tabs}
       {!wide && <button className="quiet-button gjs-close" type="button" onClick={() => setDrawer(false)}>收起</button>}
     </aside>
@@ -664,7 +714,6 @@ export default function GameBoard({
             {seatCell(1)}
             {tributePanel}
           </div>
-          {coach}
           {mobile && game.stage === "playing" && <div className="gj-mine-play">{playArea(viewSeat)}</div>}
           {autoBanner}
           {mobile && <div className="gj-mobile-me">{plate(viewSeat, 0)}</div>}
@@ -695,8 +744,23 @@ export default function GameBoard({
         <button className="primary-button gjd-show-summary" type="button" onClick={() => setHideSummary(false)}>看结算</button>
       )}
       {game.phase === "finished" && (
-        <FinalDialog game={game} room={room} nameOf={nameOf} mySeat={mySeat} spectating={spectating} onRematch={onRematch} onLeave={onLeave} />
+        <FinalDialog game={game} room={room} nameOf={nameOf} mySeat={mySeat} spectating={spectating} onRematch={onRematch} onLeave={onLeave} actions={finalActions} />
       )}
+      {shownHint && (
+        <Coach
+          bubble
+          view={{
+            key: `hint-${game.version}`,
+            say: shownHint.say,
+            ...(shownHint.note ? { note: shownHint.note } : {}),
+            anchor: shownHint.anchor,
+            focus: false,
+            face: "think",
+            actions: <button className="quiet-button" type="button" onClick={() => setCoachHint(null)}>知道了</button>,
+          }}
+        />
+      )}
+      {tips.tip && <TipToast tip={tips.tip} onClose={tips.dismiss} onNever={tips.never} />}
     </div>
   );
 }
@@ -737,7 +801,7 @@ function HandSummary({ game, nameOf, mySeat, busy, onReady, onHide, secondsLeft,
     <div className="gjd-modal" role="dialog" aria-label="一盘结算">
       <div className="gjd-dialog gm-panel" data-tutorial="summary">
         <h2>第 {result.handNo} 盘结束{result.sweep ? `：${TEAM_NAMES[result.sweepTeam!]}联邦串三户！` : ""}</h2>
-        <div className="gjd-ribbons">
+        <div className="gjd-ribbons" data-tutorial="summary-ribbons">
           {([0, 1] as const).map((team) => (
             <span key={team} className="gjd-ribbon" style={{ backgroundImage: `url(${art.ribbon(team)})` }}>
               {TEAM_NAMES[team]}联邦 {signed(result.teamDeltas[team])}
@@ -777,7 +841,7 @@ function HandSummary({ game, nameOf, mySeat, busy, onReady, onHide, secondsLeft,
   );
 }
 
-function FinalDialog({ game, room, nameOf, mySeat, spectating, onRematch, onLeave }: {
+function FinalDialog({ game, room, nameOf, mySeat, spectating, onRematch, onLeave, actions }: {
   readonly game: GameState;
   readonly room: LobbyRoomSnapshot;
   readonly nameOf: (seat: number) => string;
@@ -785,6 +849,7 @@ function FinalDialog({ game, room, nameOf, mySeat, spectating, onRematch, onLeav
   readonly spectating: boolean;
   readonly onRematch: (accept: boolean) => void;
   readonly onLeave: () => void;
+  readonly actions?: ReactNode | undefined;
 }) {
   const final = game.finalResult!;
   const myTeam = mySeat >= 0 ? teamOf(mySeat) : null;
@@ -807,12 +872,13 @@ function FinalDialog({ game, room, nameOf, mySeat, spectating, onRematch, onLeav
           甲联邦：{[0, 2, 4].map(nameOf).join("、")}<br />乙联邦：{[1, 3, 5].map(nameOf).join("、")}
         </p>
         <div className="gjd-actions">
-          {!spectating && room.rematch && (
+          {actions}
+          {!actions && !spectating && room.rematch && (
             <button className="primary-button gjd-btn" type="button" disabled={accepted} onClick={() => onRematch(true)}>
               {accepted ? `等其他人（${room.rematch.acceptedIds.length}/${room.members.length}）` : "再来一局"}
             </button>
           )}
-          <button className="quiet-button gjd-btn" type="button" onClick={onLeave}>{spectating ? "离开观战" : "离开房间"}</button>
+          {!actions && <button className="quiet-button gjd-btn" type="button" onClick={onLeave}>{spectating ? "离开观战" : "离开房间"}</button>}
         </div>
       </div>
     </div>

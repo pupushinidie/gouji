@@ -124,6 +124,15 @@
 - 强度（`npm run sim:bot -- vs 500`，同种子换边，每场 5 盘）：对随机场胜率 100%、盘均分 +11.95；对 greedy-min（最小能压就压、不管队友）场胜率 100%、盘均分 +8.3；混编（普通 ×1 + greedy ×2 对 greedy ×3）盘均分 +2.1。决策平均 0.02ms、最坏约 2ms。
 - 参数在 `BOT_TUNING`，`npm run sim:bot -- tune 500 key=value` 对比默认值。
 
+## 新手教程
+
+做法照站内统一的 `~/projects/pipeline/handbook/tutorial-notes.md`（教练层 `apps/web/src/tutorial/` 从保皇复制，没改逻辑）。
+- 剧本 `packages/game/src/tutorial.ts`：四段残局（出牌和够级 → 烧牌、走科、接风、无头 → 四人乱缠 → 计分、进贡、还贡、革命、本站设定），49 步左右，约 5 分钟；段与段之间用 `{ type: "SCENE" }` 换局面。教程里烧牌窗口立刻满 2 秒（`tutorialApply`）。
+- 网页 `TutorialMode.tsx`（拼假房间、侧栏进度、练习局）、`tutorialGame.ts`（提示的说法、小贴士）。入口在首页和等候房间（不离开房间，房主开局自动回牌桌），地址带 `?tutorial` 直接打开。
+- 练习局：一场 1 盘，你和 5 个人机；「提示」（键盘 H）= 人机替你算一步 + 一句理由。「提示」只在练习局或一个人加人机的房间里有。
+- 真实对局里第一次遇到够级、能烧、让牌、能革命、接风、无头、乱缠、串三户、进贡时出一次小贴士。
+- 测试：`packages/game/test/tutorial.test.ts`；走查脚本 `~/projects/qa-reports/tools/gouji/tut.mjs <输出目录> flow|skip <尺寸> <主题>`（`LONG=1` 打完练习局）。
+
 ## 限时和超时
 
 | 步骤 | 限时 | 超时的默认动作 |

@@ -308,7 +308,7 @@ function returnCards(ctx: Ctx, n: number): Card[] {
       if (rank >= TWO) cost = 100 + rank;
       else {
         const have = counts[rank]!;
-        cost = rank + (have === 1 ? 0 : 15);
+        cost = rank + (have === 1 ? 0 : 15) + (rank >= 13 ? 10 : 0); // 孤张 K、A 留着（挂一张 2 就是够级牌）
         if (isGoujiGroup(rank, have) && !isGoujiGroup(rank, have - 1)) cost += 30;
       }
       if (!best || cost < best.cost) best = { card, cost };
@@ -355,7 +355,7 @@ export function botDecision(view: GoujiState, seat: number): BotDecision {
     }
     case "revolution":
       if (view.you?.canRevolt && tuning.revolt) return { command: { type: "REVOLT", revolt: true }, reason: "手里一张王和 2 都没有，革命：这盘算四科，不扣分。" };
-      return { command: { type: "REVOLT", revolt: false }, reason: view.you?.canRevolt ? "不革命，正常打。" : "继续。" };
+      return { command: { type: "REVOLT", revolt: false }, reason: view.you?.canRevolt ? "不革命，正常打。" : "你手里有王或 2，不能革命；每盘大家都要表态，点「继续」。" };
     case "handEnd":
       return { command: { type: "READY" }, reason: "准备好下一盘。" };
     case "playing": {

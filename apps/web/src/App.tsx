@@ -4,6 +4,10 @@ import { art, seatColor } from "./art.js";
 import { CardView } from "./cards.js";
 import { useConfirm } from "./confirm.js";
 import GameBoard from "./GameBoard.js";
+import { TutorialInvite } from "./tutorial/Invite.js";
+import { readTutorial } from "./tutorial/storage.js";
+import { GAME_ID } from "./tutorialGame.js";
+import TutorialMode from "./TutorialMode.js";
 import GameRules from "./GameRules.js";
 import OnlineRooms from "./OnlineRooms.js";
 import RoomChat from "./RoomChat.js";
@@ -45,6 +49,26 @@ function App() {
   // 观战时从谁的座位看（默认第一位玩家）。
   const [watchId, setWatchId] = useState("");
   const voice = useVoice(room);
+  // 新手教程：首页或等候房间点进来（地址带 ?tutorial 时直接打开，游戏中心可以直接链过来）
+  const [tutorialOpen, setTutorialOpen] = useState(() => new URLSearchParams(window.location.search).has("tutorial"));
+
+  function closeTutorial() {
+    setTutorialOpen(false);
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("tutorial")) {
+      params.delete("tutorial");
+      const query = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+    }
+  }
+
+  // 在等候房间里看教程时，房主一开局就回到牌桌（不然这一步会超时、转成托管）
+  useEffect(() => {
+    if (tutorialOpen && room?.status === "playing") {
+      closeTutorial();
+      setNotice("对局开始了，教程先停在这里。");
+    }
+  }, [tutorialOpen, room?.status]);
 
   // 「房间已创建」「房间码已复制」这类临时提示 4 秒后自动消失，不一直挂在页面上。
   useEffect(() => {
@@ -227,6 +251,15 @@ function App() {
     }
   }
 
+  if (tutorialOpen && room?.status !== "playing") {
+    return (
+      <main className="app-shell gj-game tut-on">
+        <TutorialMode name={name} brand={<Brand />} themeToggle={themeToggle} theme={theme} waitingRoom={room?.code} onExit={closeTutorial} />
+        {confirmDialog}
+      </main>
+    );
+  }
+
   if (room?.status === "playing" && room.game) {
     const watched = room.game.players.some((player) => player.id === watchId) ? watchId : room.game.players[0]!.id;
     return (
@@ -275,6 +308,15 @@ function App() {
           onKick={kickMember}
           onDissolve={dissolveRoom}
           chat={<RoomChat room={room} voice={voice} />}
+          tutorial={
+            <TutorialInvite
+              record={readTutorial(GAME_ID)}
+              title="等人的时候，先学一下？"
+              text="咕噜嘎带你在真牌桌上走几手，5 分钟。不会离开房间，房主一开局就自动回来。"
+              again="新手教程（不离开房间）"
+              onOpen={() => setTutorialOpen(true)}
+            />
+          }
         />
         {confirmDialog}
       </main>
@@ -301,6 +343,13 @@ function App() {
             青岛的四副牌扑克。六个人隔座组成两个联邦，正对面是你的对头；比谁先出完。
             够大的牌只有对头能管，牌好时还能抢着「烧」。人不够时人机坐空座，一个人也能练手。
           </p>
+          <TutorialInvite
+            record={readTutorial(GAME_ID)}
+            title="第一次玩？5 分钟学会"
+            text="咕噜嘎在真牌桌上带你走几手：够级、烧牌、乱缠、进贡，学完和人机练一盘。"
+            again="再看一遍新手教程"
+            onOpen={() => setTutorialOpen(true)}
+          />
           <ul className="dz-home-points">
             <li><b>够级</b>2 张 K、3 张 Q……只有对头能管</li>
             <li><b>烧牌</b>能一口气出完时抢着压别人的够级牌</li>
@@ -479,6 +528,7 @@ function RoomView({
   onKick,
   onDissolve,
   chat,
+  tutorial,
 }: {
   room: LobbyRoomSnapshot;
   busy: boolean;
@@ -490,6 +540,7 @@ function RoomView({
   onKick: (memberId: string) => void;
   onDissolve: () => void;
   chat: ReactNode;
+  tutorial?: ReactNode;
 }) {
   const { isHost, spectating } = roomRole(room);
   const openSeats = Math.max(0, SEAT_COUNT - room.members.length);
@@ -525,6 +576,7 @@ function RoomView({
               <div className="room-code-caption">从首页列表进来观战，看不到房间码</div>
             )}
             <OptionsPanel room={room} />
+            {tutorial && !spectating && <div className="gjr-tut">{tutorial}</div>}
           </section>
 
           <section className="room-panel player-panel">

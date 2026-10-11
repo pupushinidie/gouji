@@ -9,6 +9,7 @@ import "./app-pixel.css";
 import "./ddz.css";
 import "./gouji.css";
 import "./theme-day.css";
+import "./tutorial/tutorial.css";
 
 applyTheme(readTheme());
 
