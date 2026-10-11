@@ -91,3 +91,18 @@ export type { CardsSpec, DealSpec, PreviewRoomOptions, ResultSpec, SceneName, St
 export { cloneState } from "./gouji.js";
 export { botDecision, botBurnDecision, botHint, BOT_TUNING, setBotTuning } from "./bot.js";
 export type { BotDecision, BotTuning } from "./bot.js";
+export {
+  anchorVisible,
+  createPracticeGame,
+  createTutorialGame,
+  createTutorialScene,
+  sameCommand,
+  selectionMatches,
+  TUTORIAL_FINAL_STEP,
+  TUTORIAL_SELF,
+  TUTORIAL_STEPS,
+  tutorialActor,
+  tutorialApply,
+  tutorialCanAct,
+} from "./tutorial.js";
+export type { TutorialCommand, TutorialFace, TutorialScene, TutorialStep } from "./tutorial.js";
