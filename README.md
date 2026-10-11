@@ -133,6 +133,14 @@
 - 真实对局里第一次遇到够级、能烧、让牌、能革命、接风、无头、乱缠、串三户、进贡时出一次小贴士。
 - 测试：`packages/game/test/tutorial.test.ts`；走查脚本 `~/projects/qa-reports/tools/gouji/tut.mjs <输出目录> flow|skip <尺寸> <主题>`（`LONG=1` 打完练习局）。
 
+## 声音
+
+这款还没有背景音乐（`App.tsx` 用 `NO_BGM`，♪ 面板照样能调音效和语音）。
+
+音效（2026-10-11）：在 `apps/web/src/game-sfx.ts`，看对局 history 里比上一次多出来的事件放声音：发牌 deal、出牌 card（按张数）、够级牌再加一记低鼓（招牌）、剩 1–2 张两声嘀、过 pass、让牌 表态音 + pass、烧牌（招牌：一团火呼地烧起来、噼啪几声；成功再加 score，解烧 hit + 烧牌的人 bust）、革命（招牌：鼓点滚上去 + boom）、吃贡 / 免贡 表态音、进贡 card + 对方 draw、还贡 card + draw、抗贡 sparkle、头科 sparkle / 其余走科 score、接风一声轻响、自己无头 bust、四人乱缠 roundStart、一盘得分 score / 扣分 bust（串三户再加 sparkle）、整场 gameOver、自己超时 timeout。只有自己看得到的选择（烧牌窗口里先收下的出牌 / 过牌、按了烧牌、吃贡免贡、还贡、革命表态）按下就给自己响，公开时不再重复；别人的这些选择公开前不出声。教程里 SCENE 换局面不出声。自己的动作响亮，别人的减半（观战都算别人的）；第一次拿到对局不出声，事件对不上或一下来一大串只放最后一步。
+
+选牌：点手牌选上 / 放下响 select，不能点的时候（革命的人手牌是灰的）响 deny；服务器拒绝操作时响 error；教程里没按剧本走响 deny。自己最后 5 秒每秒一声、轮到自己响 yourTurn（`useSfxCountdown`、`useGameSfx`，都在牌桌组件里调）；有人进出房间、开局、收到聊天由 `App.tsx` 的 `useRoomSfx` 负责。开发模式下放过的声音名字记在 `window.__sfxLog`，自测脚本 `~/projects/qa-reports/tools/gouji-sfx.mjs` 靠它确认每种动作都响了（教程走一遍 + 联机和人机打一局 + 预览页场景里做吃贡、还贡、革命、烧牌、让牌）。声音面板（顶栏 ♪：音乐 / 音效 / 语音）和合成音色在全站共用的 `gm-sound.tsx`，别在这里改。
+
 ## 限时和超时
 
 | 步骤 | 限时 | 超时的默认动作 |

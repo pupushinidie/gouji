@@ -68,6 +68,7 @@ export default function Hand({
                 className={classes}
                 data-rank={rank}
                 data-tutorial={`col-${rank}`}
+                data-sfx="none"
                 disabled={disabled}
                 style={{ width, marginLeft: index > 0 ? step - width : 0, zIndex: index + 1 } as CSSProperties}
                 onClick={() => onPick(rank)}

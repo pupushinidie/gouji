@@ -28,7 +28,9 @@ import { Coach, TipToast } from "./tutorial/Coach.js";
 import { useFirstTimeTips } from "./tutorial/tips.js";
 import { detectTips, GAME_ID, hintFor, TIPS, type Hint } from "./tutorialGame.js";
 import { CardRow, preloadCards } from "./cards.js";
+import { selectSound, useGameSfx } from "./game-sfx.js";
 import GameRules from "./GameRules.js";
+import { useSfxCountdown } from "./gm-sound.js";
 import Hand, { HAND_RANKS, isWildRank, picksOf, selectedCards, shortRank } from "./Hand.js";
 import { eventText, KIND_NAMES, signed } from "./log.js";
 import { GameRoomMenu, SpectateBar } from "./RoomExtras.js";
@@ -164,6 +166,12 @@ export default function GameBoard({
   const inBurnLead = myTurn && !top && game.burn?.burner === mySeat;
   const pick = (rank: number) => {
     setHint("");
+    // 选上往上一声、放下往下一声（列上 data-sfx="none" 关掉了默认的轻点）
+    {
+      const have = hand.filter((card) => rankOf(card) === rank).length;
+      const now = picks[rank] ?? 0;
+      selectSound(isWildRank(rank) || returnMode ? (now + 1) % (have + 1) > 0 : now === 0);
+    }
     setPicks((current) => {
       const next = [...current];
       const have = hand.filter((card) => rankOf(card) === rank).length;
@@ -334,6 +342,10 @@ export default function GameBoard({
   const waitingWindow = game.stage === "playing" && top !== null && !top.ready;
   const choiceDone = game.stage === "revolution" && mySeat >= 0 && game.revolution?.choices[mySeat] !== null;
   const tributeMine = game.stage === "tribute" && mySeat >= 0 && game.tribute?.items.some((item) => item.receiver === mySeat && item.intra && item.eat === null);
+  // 动作音效（game-sfx.ts）和自己最后 5 秒的倒计时滴答：要自己做决定的时候（出牌、吃贡免贡、还贡、革命表态）
+  const needMe = !spectating && playing && (myTurn || Boolean(tributeMine) || returnMode || (game.stage === "revolution" && !choiceDone));
+  useGameSfx(game, spectating ? null : mySeat, needMe);
+  useSfxCountdown(needMe, secondsLeft);
 
   let headline = "";
   if (game.phase === "finished") headline = "一场结束";

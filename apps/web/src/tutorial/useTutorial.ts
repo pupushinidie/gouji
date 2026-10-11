@@ -6,6 +6,7 @@
  * 每款游戏只要提供一个 TutorialEngine（怎么开局、怎么走一步、现在轮到谁、人机怎么走、各种等待时间）。
  */
 import { useEffect, useRef, useState } from "react";
+import { sfx } from "../gm-sound.js";
 
 /** 剧本步骤里这一层要用到的字段（各游戏 packages/game/src/tutorial.ts 里的 TutorialStep 都符合）。 */
 export interface ScriptStepLike<C> {
@@ -75,6 +76,7 @@ export function useTutorial<S, C, Step extends ScriptStepLike<C>>(engine: Tutori
       return;
     }
     if (!step || step.kind !== "do" || step.expect === undefined || !current.same(command, step.expect)) {
+      sfx.deny(); // 没按剧本走：响一声「不行」
       setFlash(WRONG_STEP);
       return;
     }
