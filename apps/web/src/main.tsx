@@ -7,6 +7,7 @@ import "./styles.css";
 // 白天版由 day-theme.ts 接在它们后面生成，theme-day.css 是手调的部分。
 import "./app-pixel.css";
 import "./ddz.css";
+import "./gouji.css";
 import "./theme-day.css";
 
 applyTheme(readTheme());

@@ -1,12 +1,12 @@
 import type { DayPalette } from "./day-theme";
 
 /**
- * 白天版调色表（斗地主，和欲罢不能、幸运数字、麻将同一套夜色蓝灰）。
+ * 白天版调色表（够级，从斗地主来，和欲罢不能、幸运数字、麻将同一套夜色蓝灰）。
  * 深色底、面板、按钮 → 白底浅色；深色像素描边保留；浅色字 → 深色字。
  * 牌桌（农家院场景、牌）和桌上的深色小牌子（名牌、底牌倍数条、操作条……）、座位色、按钮里的金色红色这些内容色不换。
  */
 export const palette: DayPalette = {
-  files: ["app-pixel.css", "ddz.css"],
+  files: ["app-pixel.css", "ddz.css", "gouji.css"],
   colors: {
     "#0c1120": "#ffffff", // 底色、输入框
     "#101729": "#f8f9fc", // 底色的棋盘纹
@@ -39,6 +39,8 @@ export const palette: DayPalette = {
     "calc(var(--px) * 2) calc(var(--px) * 2) 0 var(--edge)": "calc(var(--px) * 2) calc(var(--px) * 2) 0 #f0d890",
   },
   keep: [
+    // 够级牌桌：gj- 开头的都是桌上的东西（海边场景上的深色小牌子），白天保持原色
+    "gj-",
     "dz-table", "dz-top", "dz-bottom", "dz-multi", "dz-hand-no", "dz-tracker-pop", "dz-plate", "dz-avatar-box", "dz-chip", "dz-role",
     "dz-count", "dz-clock", "dz-alert", "dz-bubble", "dz-open-hand", "dz-open-text", "dz-plays", "dz-play", "dz-play-cards", "dz-play-label", "dz-pass",
     "dz-fx", "dz-center", "dz-actions", "dz-actions-time", "dz-note", "dz-mine", "dz-hand", "dz-banner", "dz-auto-banner", "dz-status-mini", "dz-card",

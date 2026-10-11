@@ -3,7 +3,7 @@ import { DEFAULT_OPTIONS, SEAT_COUNT, TEAM_NAMES, teamOf, type Card, type GameCo
 import { art, seatColor } from "./art.js";
 import { CardView } from "./cards.js";
 import { useConfirm } from "./confirm.js";
-import DebugBoard from "./DebugBoard.js";
+import GameBoard from "./GameBoard.js";
 import GameRules from "./GameRules.js";
 import OnlineRooms from "./OnlineRooms.js";
 import RoomChat from "./RoomChat.js";
@@ -228,22 +228,24 @@ function App() {
   }
 
   if (room?.status === "playing" && room.game) {
-    // 调试牌桌（引擎阶段）；正式牌桌由界面阶段做。watchId 留给观战选座位用。
-    void watchId;
-    void setWatchId;
+    const watched = room.game.players.some((player) => player.id === watchId) ? watchId : room.game.players[0]!.id;
     return (
-      <main className="app-shell dz-game">
-        <DebugBoard
+      <main className="app-shell gj-game">
+        <GameBoard
           room={room}
           busy={busy}
           error={error}
           notice={notice}
           brand={<Brand />}
+          connection={<ConnectionStatus connected={connected} />}
+          theme={theme}
           themeToggle={themeToggle}
           chat={<RoomChat room={room} voice={voice} />}
           onCommand={submitGameCommand}
           onRematch={voteRematch}
           onDissolve={dissolveRoom}
+          watchId={watched}
+          onWatch={setWatchId}
           onLeave={leaveRoom}
         />
         {confirmDialog}
@@ -530,39 +532,9 @@ function RoomView({
               <div className="panel-label">座位 <span>{room.members.length} 人 · {openSeats} 个空座</span></div>
               <span className="waiting-pill"><i /> 等待中</span>
             </div>
-            <div className="player-list">
-              {Array.from({ length: SEAT_COUNT }, (_, seat) => {
-                const member = room.members.find((candidate) => candidate.seat === seat);
-                const mine = room.members.find((candidate) => candidate.id === socket.id);
-                const team = `${TEAM_NAMES[teamOf(seat)]}联邦 · ${seat} 号座`;
-                if (!member) {
-                  return (
-                    <div className="player-row open-seat" key={`seat-${seat}`}>
-                      <div className="empty-avatar"><span>＋</span></div>
-                      <div className="player-details"><strong>空座：人机补位</strong><span>{team}</span></div>
-                      {mine && <button className="kick-button" type="button" onClick={() => socket.emit("room:seat", seat, () => {})}>坐这里</button>}
-                    </div>
-                  );
-                }
-                return (
-                  <div className="player-row" key={member.id}>
-                    <div className="player-avatar dz-member-avatar" style={{ background: seatColor(teamOf(seat)) } as CSSProperties}>
-                      <span>{member.name.slice(0, 1).toUpperCase()}</span>
-                    </div>
-                    <div className="player-details">
-                      <strong>{member.name}{member.id === socket.id ? <small>你</small> : null}</strong>
-                      <span>{team}{mine && mine.seat !== seat && (mine.seat + 3) % 6 === seat ? " · 你的对头" : mine && mine.seat !== seat && teamOf(mine.seat) === teamOf(seat) ? " · 你的队友" : ""}</span>
-                    </div>
-                    {member.isHost && <span className="host-badge">房主</span>}
-                    {isHost && !member.isHost && (
-                      <button className="kick-button" type="button" onClick={() => onKick(member.id)} title={`把 ${member.name} 移出房间`}>移出</button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <p className="field-hint">
-              选座就是选队：甲 0、2、4，乙 1、3、5，正对面是对头。打 {room.options.hands} 盘，累计分高的联邦获胜。出牌 30 秒（让牌后再表态 15 秒）、吃免贡 10 秒、还贡 20 秒、革命 10 秒，超时自动处理（发牌出最小的一张、接牌过）；连续超时 2 次转托管（人机替你打），掉线 3 秒后人机代打，用原昵称回来能接上。
+            <SeatGrid room={room} onKick={onKick} />
+            <p className="field-hint gjr-hint">
+              选座就是选队，正对面是对头（永远是对手）。空座开局时由人机（咕噜一号…）补上。打 {room.options.hands} 盘，累计分高的联邦赢。
             </p>
             <RoomSettingsPanel room={room} />
             <SeatSwitch room={room} />
@@ -584,6 +556,52 @@ function RoomView({
       {notice && <p className="feedback feedback-success room-feedback" role="status">{notice}</p>}
       <div className="room-secure-note"><span>◇</span> {room.access.open ? "公开房间：首页列表里的人可以直接加入空座位。" : "邀请制：要有房间码才能加入；首页列表不显示房间码。"}</div>
     </section>
+  );
+}
+
+/** 等候房间的座位：甲、乙两个联邦各一列（座位 0、2、4 / 1、3、5），对头排在同一行。房主可以对调两个座位。 */
+function SeatGrid({ room, onKick }: { room: LobbyRoomSnapshot; onKick: (memberId: string) => void }) {
+  const { isHost } = roomRole(room);
+  const mine = room.members.find((candidate) => candidate.id === socket.id);
+  const [swapFrom, setSwapFrom] = useState<number | null>(null);
+  const [swapError, setSwapError] = useState("");
+  const swap = (a: number, b: number) => {
+    socket.emit("room:swap-seats", { a, b }, (response) => setSwapError(response.ok ? "" : response.error));
+    setSwapFrom(null);
+  };
+  const cell = (seat: number) => {
+    const member = room.members.find((candidate) => candidate.seat === seat);
+    const team = teamOf(seat);
+    const relation = mine && mine.seat !== seat ? ((mine.seat + 3) % 6 === seat ? "你的对头" : teamOf(mine.seat) === team ? "你的队友" : "") : "";
+    return (
+      <div key={seat} className={["gjr-seat", member ? "" : "open", member?.id === socket.id ? "mine" : "", swapFrom === seat ? "picked" : ""].filter(Boolean).join(" ")}>
+        <span className="gjr-avatar" style={{ backgroundImage: `url(${art.frame(team)})` }}>
+          {member ? <img src={art.avatar(seat)} alt="" width={40} height={40} /> : <b>+</b>}
+        </span>
+        <span className="gjr-info">
+          <strong>{member ? member.name : "空座"}{member?.id === socket.id ? <small>你</small> : null}{member?.isHost ? <small className="host">房主</small> : null}</strong>
+          <span>{seat} 号座{relation ? ` · ${relation}` : member ? "" : " · 开局人机补位"}</span>
+        </span>
+        <span className="gjr-actions">
+          {!member && mine && <button className="quiet-button" type="button" onClick={() => socket.emit("room:seat", seat, () => {})}>坐这里</button>}
+          {isHost && swapFrom === null && <button className="quiet-button" type="button" onClick={() => setSwapFrom(seat)} title="和另一个座位对调">对调</button>}
+          {isHost && swapFrom !== null && swapFrom !== seat && <button className="primary-button" type="button" onClick={() => swap(swapFrom, seat)}>和 {swapFrom} 号换</button>}
+          {isHost && swapFrom === seat && <button className="quiet-button" type="button" onClick={() => setSwapFrom(null)}>取消</button>}
+          {isHost && member && !member.isHost && swapFrom === null && <button className="kick-button" type="button" onClick={() => onKick(member.id)} title={`把 ${member.name} 移出房间`}>移出</button>}
+        </span>
+      </div>
+    );
+  };
+  return (
+    <div className="gjr-teams" data-tutorial="room-seats">
+      {([0, 1] as const).map((team) => (
+        <div key={team} className={`gjr-team team-${team}`}>
+          <h4><img src={art.team(team)} alt="" width={24} height={24} />{TEAM_NAMES[team]}联邦</h4>
+          {[team, team + 2, team + 4].map(cell)}
+        </div>
+      ))}
+      {swapError && <p className="feedback feedback-error" role="alert">{swapError}</p>}
+    </div>
   );
 }
 
