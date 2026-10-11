@@ -21,6 +21,7 @@
 .gjt-round-score .team-0 { background: #17487e; }
 .gjt-round-score .team-1 { background: #86281a; }
 .gjt-round-stage { padding: 2px 8px; color: var(--gold); background: #3a2c10; font-size: 12px; }
+.gjt-right .gm-modal-backdrop, .gjt-right .game-room-popover { white-space: normal; }
 .gjt-right { display: flex; align-items: center; gap: 10px; margin-left: auto; white-space: nowrap; }
 .gjt-menu-toggle { margin-left: auto; }
 
@@ -261,7 +262,7 @@
 
 /* ---------- 手机（牌桌宽 < 640，GameBoard 加 .mobile） ---------- */
 .gj-table.mobile { display: flex; flex-direction: column; gap: 6px; min-height: calc(100dvh - 44px); padding: 6px 6px 4px; overflow: visible; }
-.gj-table.mobile .gj-control { margin-top: auto; }
+.gj-table.mobile .gj-mobile-me { margin-top: auto; }
 .gj-table.mobile .gj-arena { grid-template-rows: auto auto; gap: 6px 4px; flex: none; }
 .gj-table.mobile .gj-seat { align-items: center; gap: 2px; }
 .gj-table.mobile .gj-plate { flex-direction: column; gap: 0; width: 100%; padding: 0 2px; border-width: 6px; border-image-width: 6px; }
@@ -291,7 +292,12 @@
 .gj-table.mobile .gj-banner { position: absolute; left: 3%; right: 3%; top: 26%; justify-content: center; white-space: normal; }
 .gj-table.mobile .gj-gouji-fx { top: -6px; }
 .gj-table.mobile .gj-gouji-text { top: 30px; }
-.gj-table.mobile .gj-auto-banner { position: fixed; bottom: 8px; font-size: 12px; }
+.gj-table.mobile .gj-auto-banner { position: static; justify-content: center; margin-top: auto; transform: none; font-size: 12px; white-space: normal; }
+.gj-table.mobile .gj-auto-banner ~ .gj-mobile-me { margin-top: 0; }
+.gj-table.mobile .gj-mobile-me { display: flex; justify-content: center; }
+.gj-table.mobile .gj-mobile-me .gj-plate { flex-direction: row; gap: 8px; width: auto; padding: 0 8px; }
+.gj-table.mobile .gj-mobile-me .gj-name-row { line-height: 28px; }
+.gj-table.mobile .gj-mobile-me .gj-plate-text { flex-direction: row; align-items: center; gap: 8px; }
 
 @media (max-width: 639px) {
   .app-shell.gj-game { height: auto; min-height: 100dvh; overflow: visible; }

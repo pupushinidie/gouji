@@ -377,7 +377,7 @@ export default function GameBoard({
     const ring = fx.find((item) => item.kind === "gouji" && item.duel === seat);
     const finishing = fx.find((item) => item.kind === "finish" && item.seat === seat);
     const jiefeng = fx.find((item) => item.kind === "jiefeng" && item.seat === seat);
-    const peek = seat !== mySeat && mySeat >= 0 && player.hand.length > 0 && game.stage !== "handEnd" ? player.hand : null;
+    const peek = seat !== mySeat && player.hand.length > 0 && game.stage !== "handEnd" ? player.hand : null;
     return (
       <div
         className={["gj-plate", `team-${team}`, active ? "active" : "", place >= 0 || game.revolutionary === seat ? "out" : ""].filter(Boolean).join(" ")}
@@ -405,7 +405,7 @@ export default function GameBoard({
             {statusIcons(seat).map(({ icon, title }) => <img key={icon} className="gj-icon" src={art.status(icon)} alt={title.split("：")[0]} title={title} width={24 * as} height={24 * as} />)}
             {active && secondsLeft !== null && !player.bot && <b className={secondsLeft <= 5 ? "gj-clock low" : "gj-clock"}>{secondsLeft}s</b>}
           </span>
-          {peek && <span className="gj-peek" title="看牌：队友剩 10 张以下，你能看到他的手牌">看牌 {peek.map((card) => shortRank(rankOf(card))).join(" ")}</span>}
+          {peek && <span className="gj-peek" title={spectating ? "观战看手牌" : "看牌：队友剩 10 张以下，你能看到他的手牌"}>{spectating ? "手牌" : "看牌"} {peek.map((card) => shortRank(rankOf(card))).join(" ")}</span>}
         </span>
       </div>
     );
@@ -645,7 +645,7 @@ export default function GameBoard({
           {isHost && <button className="quiet-button danger" type="button" onClick={onDissolve}>解散</button>}
           {spectating && <button className="quiet-button" type="button" onClick={onLeave}>离开观战</button>}
           {(!wide || mobile) && (
-            <button className="quiet-button" type="button" aria-expanded={drawer} onClick={() => setDrawer(!drawer)}>记录 / 聊天{unread > 0 ? ` · ${unread}` : ""}</button>
+            <button className="quiet-button gjt-drawer-toggle" type="button" aria-expanded={drawer} onClick={() => setDrawer(!drawer)}>记录 / 聊天{unread > 0 ? ` · ${unread}` : ""}</button>
           )}
           {connection}
         </div>
@@ -666,6 +666,8 @@ export default function GameBoard({
           </div>
           {coach}
           {mobile && game.stage === "playing" && <div className="gj-mine-play">{playArea(viewSeat)}</div>}
+          {autoBanner}
+          {mobile && <div className="gj-mobile-me">{plate(viewSeat, 0)}</div>}
           {controlRow}
           {me && game.stage !== "handEnd" ? (
             <Hand hand={hand} picks={picks} layout={layout} dim={dim} onPick={pick} disabled={game.revolutionary === mySeat} />
@@ -684,7 +686,6 @@ export default function GameBoard({
               <strong className={`team-${item.team}`}>{TEAM_NAMES[item.team]}联邦 串三户！</strong>
             </div>
           ))}
-          {autoBanner}
         </div>
         {side}
       </div>
