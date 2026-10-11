@@ -1,0 +1,535 @@
+{
+ "note": "够级正式美术定稿（guluga-game-art 自查自选，2026-10-10）。改选：把某项的 pick 改成 candidates 里的 id，再跑 python art/final.py；候选原图在 art/out/r1、r2（gitignore），出图脚本 art/r1.py–r3.py。",
+ "items": {
+  "scene-night.png": {
+   "pick": "pixen-s7201",
+   "recommended": "pixen-s7201",
+   "reason": "两边红瓦老房、正中栈桥通到八角亭，灯串和月亮在上方，和白天 s7201 构图几乎一样（换主题不跳）",
+   "candidates": [
+    {
+     "id": "pixen-s7201",
+     "note": "两边红瓦老房、正中栈桥通到八角亭，灯串和月亮在上方，和白天 s7201 构图几乎一样（换主题不跳）"
+    },
+    {
+     "id": "pixen-s7101",
+     "note": "构图最开阔，地面石板多；但和任何一张白天图都配不成对"
+    },
+    {
+     "id": "pixen-s7202",
+     "note": "暖色灯光地面很漂亮；左下角有个小花盆和矮墙，底部略杂"
+    }
+   ]
+  },
+  "scene-day.png": {
+   "pick": "pixen-s7201",
+   "recommended": "pixen-s7201",
+   "reason": "和夜间 s7201 同一个构图：两边老房、正中栈桥和亭子，太阳在上方，地面米色石板干净",
+   "candidates": [
+    {
+     "id": "pixen-s7201",
+     "note": "和夜间 s7201 同一个构图：两边老房、正中栈桥和亭子，太阳在上方，地面米色石板干净"
+    },
+    {
+     "id": "pixen-s7202",
+     "note": "灯柱、亭子都好看；右边多了一道拱门，和夜间图对不上"
+    },
+    {
+     "id": "pixen-s7101",
+     "note": "带柱廊的阳台，很有度假感；但和夜间版构图差别大"
+    }
+   ]
+  },
+  "team/*": {
+   "pick": "code",
+   "recommended": "code",
+   "reason": "代码画的盾牌：撑满 24px、颜色正好是 spec 的海蓝 / 瓦红，浪和屋顶形状差别大，1× 也认得出",
+   "candidates": [
+    {
+     "id": "code",
+     "note": "代码画的盾牌：撑满 24px、颜色正好是 spec 的海蓝 / 瓦红，浪和屋顶形状差别大，1× 也认得出"
+    },
+    {
+     "id": "v2-16-10",
+     "note": "PixelLab 盾牌，质感好，但图案只占 16px，1× 时浪纹像三条横线"
+    },
+    {
+     "id": "v2-25-35",
+     "note": "PixelLab 另一组，同样偏小"
+    }
+   ]
+  },
+  "avatar/0.png": {
+   "pick": "v2-av-seagull2-2",
+   "recommended": "v2-av-seagull2-2",
+   "reason": "白海鸥、黄嘴，留出了底色，1× 也认得出；和其他五个一样不戴配饰",
+   "candidates": [
+    {
+     "id": "v2-av-seagull2-2",
+     "note": "白海鸥、黄嘴，留出了底色，1× 也认得出；和其他五个一样不戴配饰"
+    },
+    {
+     "id": "v2-av-seagull2-12",
+     "note": "眼睛更圆"
+    },
+    {
+     "id": "v2-av-seagull3-34",
+     "note": "戴白水兵帽（青岛海军城的意思），有趣但和其他五个风格不齐"
+    }
+   ]
+  },
+  "avatar/1.png": {
+   "pick": "v2-0",
+   "recommended": "v2-0",
+   "reason": "笑脸海星，五个角清楚，1× 也一眼认出",
+   "candidates": [
+    {
+     "id": "v2-0",
+     "note": "笑脸海星，五个角清楚，1× 也一眼认出"
+    },
+    {
+     "id": "v2-29",
+     "note": "表情更憨"
+    },
+    {
+     "id": "v2-18",
+     "note": "眯眼笑"
+    }
+   ]
+  },
+  "avatar/2.png": {
+   "pick": "v2-25",
+   "recommended": "v2-25",
+   "reason": "壳顶浅、条纹清楚，小脸在壳里，1× 也像蛤蜊",
+   "candidates": [
+    {
+     "id": "v2-25",
+     "note": "壳顶浅、条纹清楚，小脸在壳里，1× 也像蛤蜊"
+    },
+    {
+     "id": "v2-19",
+     "note": "壳更扁"
+    },
+    {
+     "id": "v2-21",
+     "note": "壳张得更开"
+    }
+   ]
+  },
+  "avatar/3.png": {
+   "pick": "v2-5",
+   "recommended": "v2-5",
+   "reason": "紫色章鱼，触手卷得整齐，脸清楚",
+   "candidates": [
+    {
+     "id": "v2-5",
+     "note": "紫色章鱼，触手卷得整齐，脸清楚"
+    },
+    {
+     "id": "v2-32",
+     "note": "颜色更饱和"
+    },
+    {
+     "id": "v2-12",
+     "note": "偏玫红，和乙联邦瓦红有点近"
+    }
+   ]
+  },
+  "avatar/4.png": {
+   "pick": "v2-0",
+   "recommended": "v2-0",
+   "reason": "亮绿海龟，大眼睛，在深色底上最醒目",
+   "candidates": [
+    {
+     "id": "v2-0",
+     "note": "亮绿海龟，大眼睛，在深色底上最醒目"
+    },
+    {
+     "id": "v2-16",
+     "note": "深绿带斑点"
+    },
+    {
+     "id": "v2-33",
+     "note": "青绿色，和海蓝底有点混"
+    }
+   ]
+  },
+  "avatar/5.png": {
+   "pick": "v2-16",
+   "recommended": "v2-16",
+   "reason": "灰褐海豹，胡须和白肚皮清楚",
+   "candidates": [
+    {
+     "id": "v2-16",
+     "note": "灰褐海豹，胡须和白肚皮清楚"
+    },
+    {
+     "id": "v2-48",
+     "note": "颜色更暖"
+    },
+    {
+     "id": "v2-2",
+     "note": "张嘴笑，偏暗"
+    }
+   ]
+  },
+  "status/shao*": {
+   "pick": "v2-26",
+   "recommended": "v2-26",
+   "reason": "PixelLab 火焰，三层火舌有动感；烧牌成功在同一个火焰上压白边绿对勾",
+   "candidates": [
+    {
+     "id": "v2-26",
+     "note": "PixelLab 火焰，三层火舌有动感；烧牌成功在同一个火焰上压白边绿对勾"
+    },
+    {
+     "id": "code",
+     "note": "代码画的火焰，撑满 24px 但形状比较平"
+    },
+    {
+     "id": "v2-9",
+     "note": "另一个 PixelLab 火焰，更圆"
+    }
+   ]
+  },
+  "status/jieshao.png": {
+   "pick": "code",
+   "recommended": "code",
+   "reason": "代码画的大水滴压在暗火苗上，24px 撑满，1× 一眼看出是「水灭火」",
+   "candidates": [
+    {
+     "id": "code",
+     "note": "代码画的大水滴压在暗火苗上，24px 撑满，1× 一眼看出是「水灭火」"
+    },
+    {
+     "id": "v2-7",
+     "note": "PixelLab 水滴 + 冒烟的火苗，好看但只有 12px 宽，1× 太小"
+    },
+    {
+     "id": "v2-19",
+     "note": "同上，水滴更蓝"
+    }
+   ]
+  },
+  "status/jiefeng.png": {
+   "pick": "v2-0",
+   "recommended": "v2-0",
+   "reason": "PixelLab 风团：三道卷起来的风线，一看就是「风」，比直线更有意思",
+   "candidates": [
+    {
+     "id": "v2-0",
+     "note": "PixelLab 风团：三道卷起来的风线，一看就是「风」，比直线更有意思"
+    },
+    {
+     "id": "code",
+     "note": "代码画的三道直线，容易看成「菜单」图标"
+    },
+    {
+     "id": "v2-12",
+     "note": "风团更圆"
+    }
+   ]
+  },
+  "status/geming.png": {
+   "pick": "v2-3",
+   "recommended": "v2-3",
+   "reason": "PixelLab：一张牌外面一圈金色循环箭头，意思最直接，质感好",
+   "candidates": [
+    {
+     "id": "v2-3",
+     "note": "PixelLab：一张牌外面一圈金色循环箭头，意思最直接，质感好"
+    },
+    {
+     "id": "code",
+     "note": "代码画的同一个意思，箭头较粗糙"
+    },
+    {
+     "id": "v2-32",
+     "note": "牌面是红心，和瓦红队色有点撞"
+    }
+   ]
+  },
+  "status/kanggong.png": {
+   "pick": "v2-7",
+   "recommended": "v2-7",
+   "reason": "PixelLab 银盾，有金属高光，没有十字（避开像红十字的图案）",
+   "candidates": [
+    {
+     "id": "v2-7",
+     "note": "PixelLab 银盾，有金属高光，没有十字（避开像红十字的图案）"
+    },
+    {
+     "id": "code",
+     "note": "代码画的平面银盾"
+    },
+    {
+     "id": "v2-2",
+     "note": "更窄更亮"
+    }
+   ]
+  },
+  "status/gouji.png": {
+   "pick": "code",
+   "recommended": "code",
+   "reason": "代码画的三张扇形牌 + 金星，「一手好几张大牌」的意思清楚",
+   "candidates": [
+    {
+     "id": "code",
+     "note": "代码画的三张扇形牌 + 金星，「一手好几张大牌」的意思清楚"
+    },
+    {
+     "id": "v2-37",
+     "note": "PixelLab 只画出一张牌 + 星，像「收藏」"
+    },
+    {
+     "id": "v2-59",
+     "note": "同上"
+    }
+   ]
+  },
+  "status/rang.png": {
+   "pick": "code",
+   "recommended": "code",
+   "reason": "代码画的举手 + 往右箭头（让后面的人先接），意思完整",
+   "candidates": [
+    {
+     "id": "code",
+     "note": "代码画的举手 + 往右箭头（让后面的人先接），意思完整"
+    },
+    {
+     "id": "v2-0",
+     "note": "PixelLab 手掌更好看，但没有箭头，只像「停」"
+    },
+    {
+     "id": "v2-48",
+     "note": "同上"
+    }
+   ]
+  },
+  "fx/gouji.png": {
+   "pick": "pixflux-burst931",
+   "recommended": "pixflux-burst931",
+   "reason": "PixelLab 漫画爆炸形（颜色换成 spec 的灯橙 / 瓦红），字用 22px 粗体画，笔画清楚（修了遗留的 I1）",
+   "candidates": [
+    {
+     "id": "pixflux-burst931",
+     "note": "PixelLab 漫画爆炸形（颜色换成 spec 的灯橙 / 瓦红），字用 22px 粗体画，笔画清楚（修了遗留的 I1）"
+    },
+    {
+     "id": "code",
+     "note": "代码画的星形 + 红色字牌，同样是新的 22px 字"
+    }
+   ]
+  },
+  "fx/flame.png": {
+   "pick": "anim-3103",
+   "recommended": "anim-3103",
+   "reason": "火苗左右摇、火舌一伸一缩，首末帧接得上；飘起来的几粒深色点已去掉",
+   "candidates": [
+    {
+     "id": "anim-3103",
+     "note": "火苗左右摇、火舌一伸一缩，首末帧接得上；飘起来的几粒深色点已去掉"
+    },
+    {
+     "id": "anim-3101",
+     "note": "火苗往上窜得多，最高的两帧顶端被 16×24 裁掉一点"
+    },
+    {
+     "id": "anim-3102",
+     "note": "动作最小"
+    }
+   ]
+  },
+  "fx/burn.png": {
+   "pick": "anim-3101",
+   "recommended": "anim-3101",
+   "reason": "火焰窜起、整团炸开成火星往上飘，最后剩一点小火，节奏最好",
+   "candidates": [
+    {
+     "id": "anim-3101",
+     "note": "火焰窜起、整团炸开成火星往上飘，最后剩一点小火，节奏最好"
+    },
+    {
+     "id": "anim-3103",
+     "note": "火舌卷成漩涡再散开，火星多，深色碎点也多"
+    },
+    {
+     "id": "anim-3102",
+     "note": "中间有一帧顶上冒出深色尖块，像坏帧"
+    }
+   ]
+  },
+  "fx/douse.png": {
+   "pick": "anim-3101",
+   "recommended": "anim-3101",
+   "reason": "水滴落下、溅开水花、火变小冒灰烟，三步都看得清",
+   "candidates": [
+    {
+     "id": "anim-3101",
+     "note": "水滴落下、溅开水花、火变小冒灰烟，三步都看得清"
+    },
+    {
+     "id": "anim-3102",
+     "note": "水滴钻进火里冒高烟，水花不明显"
+    },
+    {
+     "id": "anim-3103",
+     "note": "水花一圈很好看，但火没变小"
+    }
+   ]
+  },
+  "fx/finish.png": {
+   "pick": "anim-3103",
+   "recommended": "anim-3103",
+   "reason": "金星鼓起、炸成一圈金色碎片慢慢散开，最后一帧空白，播完直接撤掉",
+   "candidates": [
+    {
+     "id": "anim-3103",
+     "note": "金星鼓起、炸成一圈金色碎片慢慢散开，最后一帧空白，播完直接撤掉"
+    },
+    {
+     "id": "anim-3102",
+     "note": "中间一帧有紫色描边框，略怪"
+    },
+    {
+     "id": "anim-3101",
+     "note": "炸开时中间是一块灰色，像破洞"
+    }
+   ]
+  },
+  "fx/chuan.png": {
+   "pick": "anim-3103",
+   "recommended": "anim-3103",
+   "reason": "三支火箭拖着尾焰升空，在上方炸成三朵烟花，夜间白天底上都清楚",
+   "candidates": [
+    {
+     "id": "anim-3103",
+     "note": "三支火箭拖着尾焰升空，在上方炸成三朵烟花，夜间白天底上都清楚"
+    },
+    {
+     "id": "anim-3102",
+     "note": "烟花炸得更大，但颜色偏灰褐"
+    },
+    {
+     "id": "anim-3101",
+     "note": "火箭拖出很长的红线，像在流血"
+    }
+   ]
+  },
+  "deco/seagull.png": {
+   "pick": "anim-seagull2-3105",
+   "recommended": "anim-seagull2-3105",
+   "reason": "翅膀上→平→下→平一整拍，身体不跳，循环顺",
+   "candidates": [
+    {
+     "id": "anim-seagull2-3105",
+     "note": "翅膀上→平→下→平一整拍，身体不跳，循环顺"
+    },
+    {
+     "id": "anim-seagull2-3104",
+     "note": "也是整拍，但第 3 帧嘴变黑、身体走形"
+    },
+    {
+     "id": "anim-seagull-3103",
+     "note": "翅膀一直朝上，只是轻轻抖，看着像滑翔"
+    }
+   ]
+  },
+  "seat/frame-a.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "seat/frame-b.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "seat/plate-a.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "seat/plate-b.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "marks/duitou.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "fx/duitou-ring.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "fx/tribute-arrow.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "fx/trail.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "deco/ribbon-a.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "deco/ribbon-b.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "icon.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "status/wutou.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "status/luanchan.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "rank/1.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "rank/2.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "rank/3.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "rank/4.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "rank/5.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "rank/6.png": {
+   "pick": "code",
+   "reason": "代码画（art/simple.py），简洁版就是正式版"
+  },
+  "cover": {
+   "pick": "pixflux-s818",
+   "recommended": "pixflux-s818",
+   "candidates": [
+    {
+     "id": "pixflux-s818",
+     "note": "夜里海边露台：小牌桌上扣着红背的牌和两杯啤酒，灯柱一路排到栈桥尽头的八角亭，月亮倒影，最有「青岛夏夜打够级」的味道",
+     "file": "art/out/covers/cover-pixflux-s818.png"
+    },
+    {
+     "id": "pixflux-s811",
+     "note": "灯串 + 弯月 + 亭子 + 小牌桌，画面最满；顶上原有一条黑边已裁掉",
+     "file": "art/out/covers/cover-pixflux-s811.png"
+    },
+    {
+     "id": "pixflux-s817",
+     "note": "斜俯视的露台和栈桥，构图大气，牌桌偏左",
+     "file": "art/out/covers/cover-pixflux-s817.png"
+    }
+   ]
+  }
+ }
+}

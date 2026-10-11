@@ -191,13 +191,16 @@ def glow(img: Image.Image, cx: int, cy: int, r: int, color, strength: float = 0.
                 px[x, y] = mix(p, color, 0.35)[:3] + (p[3],)
 
 
+TIER = "simple"  # art/final.py 导出正式版时改成 "final"，PUB 改成 art/out/final
+
+
 def save(img: Image.Image, rel: str) -> None:
     p = PUB / rel
     p.parent.mkdir(parents=True, exist_ok=True)
     from PIL import PngImagePlugin
 
     info = PngImagePlugin.PngInfo()
-    info.add_text("tier", "simple")
+    info.add_text("tier", TIER)
     img.save(p, pnginfo=info)
     print(f"  {rel:28s} {img.width}×{img.height}")
 
@@ -795,34 +798,66 @@ def duitou_ring() -> Image.Image:
 
 # ---------------- 特效 ----------------
 
-def fx_gouji() -> Image.Image:
-    """96×40 × 6 帧，播一次：「够级！」从小爆开（字用 24px 像素字），最后一帧停住。"""
+BOLD_CJK = "/System/Library/Fonts/Hiragino Sans GB.ttc"  # W6（index 2），22px 单色渲染，只给「够级！」大字用
+
+
+def big_text(s: str, size: int = 22, fill=None, shadow=None) -> Image.Image:
+    """大号粗体字（单色渲染、不抗锯齿），1px 描边 + 右下 1px 投影。12px 像素字放 2 倍时「够」字笔画挤成一团（遗留 I1），
+    所以「够级！」的大字改用系统粗黑体按 22px 原生像素画，笔画清楚。没有这个字体的机器退回 12px 像素字 ×2。"""
+    fill = fill or C("cream")
+    try:
+        f = ImageFont.truetype(BOLD_CJK, size, index=2)
+    except OSError:
+        small = text_img(s, fill, 1, ink=None)
+        return outline(small.resize((small.width * 2, small.height * 2), Image.NEAREST))
+    d0 = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    x0, y0, x1, y1 = d0.textbbox((0, 0), s, font=f)
+    base = Image.new("RGBA", (x1 - x0 + 4, y1 - y0 + 4), CLEAR)
+    d = ImageDraw.Draw(base)
+    d.fontmode = "1"
+    d.text((2 - x0, 2 - y0), s, font=f, fill=fill)
+    if shadow is not None:
+        sh = Image.new("RGBA", (base.width + 1, base.height + 1), CLEAR)
+        sh.paste(Image.new("RGBA", base.size, shadow), (1, 1), base.split()[3])
+        sh.alpha_composite(base)
+        base = sh
+    return outline(crop_alpha(base))
+
+
+def fx_gouji(burst: Image.Image | None = None) -> Image.Image:
+    """96×40 × 6 帧，播一次：爆炸形从小到大，第 3 帧起「够级！」大字（22px 粗体）弹一下，最后一帧停住。
+    burst：PixelLab 出的 96×40 透明爆炸形（正式版）；不给就用代码画的星形。字一直由代码画。"""
     W, H = 96, 40
     frames = []
     small = text_img("够级！", C("cream"), 1, ink=None)
-    big = small.resize((small.width * 2, small.height * 2), Image.NEAREST)
+    big = big_text("够级！", 22, shadow=C("tile3"))
     for f in range(6):
         img = Image.new("RGBA", (W, H), CLEAR)
-        d = ImageDraw.Draw(img)
-        r = [8, 16, 22, 20, 19, 19][f]
-        rot = f * 0.18
-        rays = []
-        for k in range(16):
-            a = rot + k * math.pi / 8
-            rr = r * (1.0 if k % 2 == 0 else 0.55)
-            rays.append((W / 2 + rr * 2.2 * math.cos(a), H / 2 + rr * math.sin(a)))
-        d.polygon([(round(x), round(y)) for x, y in rays], fill=C("lamp"))
-        inner = [(W / 2 + (x - W / 2) * 0.72, H / 2 + (y - H / 2) * 0.72) for x, y in rays]
-        d.polygon([(round(x), round(y)) for x, y in inner], fill=C("tile"))
-        if f >= 2:
-            d.rectangle([W // 2 - 38, H // 2 - 12, W // 2 + 37, H // 2 + 11], fill=C("ink"))
-            d.rectangle([W // 2 - 37, H // 2 - 11, W // 2 + 36, H // 2 + 10], fill=C("tile3"))
-        img = outline(img)
-        if f == 0:
-            pass
-        elif f == 1:
-            paste_center(img, small, W // 2, H // 2)
+        if burst is not None:
+            k = [0.45, 0.8, 1.06, 0.98, 1.0, 1.0][f]
+            b = burst.resize((max(1, round(W * k)), max(1, round(H * k))), Image.NEAREST)
+            if b.width > W or b.height > H:
+                b = b.crop(((b.width - W) // 2, (b.height - H) // 2, (b.width - W) // 2 + W, (b.height - H) // 2 + H))
+            paste_center(img, b, W // 2, H // 2)
         else:
+            d = ImageDraw.Draw(img)
+            r = [8, 16, 22, 20, 19, 19][f]
+            rot = f * 0.18
+            rays = []
+            for k in range(16):
+                a = rot + k * math.pi / 8
+                rr = r * (1.0 if k % 2 == 0 else 0.55)
+                rays.append((W / 2 + rr * 2.2 * math.cos(a), H / 2 + rr * math.sin(a)))
+            d.polygon([(round(x), round(y)) for x, y in rays], fill=C("lamp"))
+            inner = [(W / 2 + (x - W / 2) * 0.72, H / 2 + (y - H / 2) * 0.72) for x, y in rays]
+            d.polygon([(round(x), round(y)) for x, y in inner], fill=C("tile"))
+            if f >= 2:
+                d.rectangle([W // 2 - 38, H // 2 - 12, W // 2 + 37, H // 2 + 11], fill=C("ink"))
+                d.rectangle([W // 2 - 37, H // 2 - 11, W // 2 + 36, H // 2 + 10], fill=C("tile3"))
+            img = outline(img)
+        if f == 1:
+            paste_center(img, small, W // 2, H // 2)
+        elif f >= 2:
             dy = [0, 0, -2, 1, 0, 0][f]
             paste_center(img, big, W // 2, H // 2 + dy)
         frames.append(img)
@@ -1060,8 +1095,10 @@ def build() -> None:
     launch_cover()
 
 
-def check() -> int:
-    """spec.md 的素材表（以 `| \\`路径\\`` 开头、带 W×H 和帧数的行）和 public/art 一一对应、尺寸对。"""
+def check(pub: Path | None = None) -> int:
+    """spec.md 的素材表（以 `| \\`路径\\`` 开头、带 W×H 和帧数的行）和 public/art（或 --dir 给的目录）一一对应、尺寸对。"""
+    PUB = pub or globals()["PUB"]
+    print("核对目录", PUB)
     rows = []
     for line in SPEC.read_text().splitlines():
         m = re.match(r"\|\s*`([^`]+\.png)`\s*\|\s*(\d+)×(\d+)\s*\|[^|]*\|[^|]*\|\s*(\d+)\s*\|", line)
@@ -1093,7 +1130,7 @@ def check() -> int:
 
 def preview() -> None:
     """拼几张「缩放到显示尺寸」的预览：背景 3×（1536×864 裁 1440×790）上摆座位、徽章、图标、特效。"""
-    out = ROOT / "art" / "out" / "preview"
+    out = ROOT / "art" / "out" / ("preview" if PUB == ROOT / "apps" / "web" / "public" / "art" else "preview-final")
     out.mkdir(parents=True, exist_ok=True)
     cards = ROOT / "apps" / "web" / "public" / "cards-pixel"
     for theme in ("night", "day"):
@@ -1180,7 +1217,12 @@ def preview() -> None:
 if __name__ == "__main__":
     args = sys.argv[1:]
     if "--check" in args:
-        sys.exit(1 if check() else 0)
+        # --dir art/out/final：核对正式美术定稿目录（相对仓库根目录或绝对路径）
+        target = None
+        if "--dir" in args:
+            target = Path(args[args.index("--dir") + 1])
+            target = target if target.is_absolute() else ROOT / target
+        sys.exit(1 if check(target) else 0)
     build()
     if "--preview" in args:
         preview()
