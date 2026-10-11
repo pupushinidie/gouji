@@ -65,6 +65,7 @@ export const TIPS = {
   headless: { title: "无头", text: "对头出完了的人叫无头：他的够级牌谁都能接，他也能接任何人的够级牌，但不能烧。" },
   chaos: { title: "四人乱缠", text: "第 2 个人出完的那一轮打完后：没有够级、烧牌、让牌，过了也还能再接。" },
   sweep: { title: "串三户", text: "一队包揽头科、二科、三科：每人 ±12，这盘立刻结束。下一盘输的一队每人给对头进 1 张贡。" },
+  intra: { title: "队友给你进贡", text: "进贡的是你的队友时，由你选「吃贡」（拿走他最大的牌，再还他同样张数）还是「免贡」（不要了），10 秒不选算吃贡。" },
   tribute: { title: "进贡", text: "大落给头科 2 张、二落给二科 1 张，只进大王、小王、2；收的人还同样张数。进的牌大家都看得到。" },
 } as const;
 
@@ -75,6 +76,7 @@ export function detectTips(game: GameState, selfId: string): string[] {
   if (self < 0) return ids;
   if ((game.you?.burnCandidates.length ?? 0) > 0) ids.push("burn-ready");
   if (game.you?.canRevolt) ids.push("revolt");
+  if (game.stage === "tribute" && game.tribute?.items.some((item) => item.receiver === self && item.intra && item.eat === null)) ids.push("intra");
   if (game.stage === "playing" && game.turn === self && canRang(game, self)) ids.push("rang");
   for (const event of game.events) {
     if (event.type === "Played" && event.gouji && !game.chaos && event.seat === oppOf(self)) ids.push("gouji");
