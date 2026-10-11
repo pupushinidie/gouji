@@ -121,8 +121,11 @@ describe("人机和托管", () => {
     expect((await call<LobbyRoomSnapshot>((ack) => host.emit("room:start", ack))).ok).toBe(true);
     await updateWhere(friend, (snapshot) => snapshot.game !== undefined);
     host.disconnect();
-    await updateWhere(friend, (snapshot) => snapshot.members.find((member) => member.name === name)?.connected === false);
-    await delay(500);
+    const offline = await updateWhere(friend, (snapshot) => snapshot.members.find((member) => member.name === name)?.connected === false);
+    const since = offline.game!.history.length;
+    // 离线的人轮到时（等一小会儿后）由人机代打
+    await updateWhere(friend, (snapshot) => snapshot.game!.history.slice(since).some((event) => (event.type === "Played" || event.type === "Passed") && event.seat === 0), 20_000);
+    await delay(300);
     const back = await connect();
     const rejoined = await call<LobbyRoomSnapshot>((ack) => back.emit("room:join", { name, code: created.code }, ack));
     expect(rejoined.ok).toBe(true);

@@ -89,3 +89,5 @@ export type {
 export { buildDeal, buildState, createScene, previewRoom, resultFrom, SCENE_NAMES } from "./scenes.js";
 export type { CardsSpec, DealSpec, PreviewRoomOptions, ResultSpec, SceneName, StateSpec } from "./scenes.js";
 export { cloneState } from "./gouji.js";
+export { botDecision, botBurnDecision, botHint, BOT_TUNING, setBotTuning } from "./bot.js";
+export type { BotDecision, BotTuning } from "./bot.js";

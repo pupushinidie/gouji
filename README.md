@@ -33,10 +33,10 @@
 | `packages/game/src/gouji.ts` | 一盘的流程（发牌 → 进贡 → 还贡 → 革命 → 出牌 → 结算）、烧牌窗口、超时、托管、隐藏信息 `redactGouji` / `spectatorView` |
 | `packages/game/src/scenes.ts` | **预览局面工厂**（对外接口，见下面「接口」） |
 | `packages/game/src/engine.ts` | 服务器和网页用的统一入口 |
-| `packages/game/src/bot.ts` | 人机——现在是占位实现（从合法操作里挑一个、能烧时一半概率烧），人机阶段会换成正式策略 |
+| `packages/game/src/bot.ts` | 人机「普通」难度（见下面「人机」一节）；`scripts/sim-gouji.ts` 是强度模拟 |
 | `packages/game/test/` | 规则书 T1–T20（`rulebook.test.ts`）、勘误和正文各节（`rules.test.ts`）、隐藏信息（`redact.test.ts`）、核心判定对拍（`sets.test.ts`）、随机对局（`random.test.ts` + `sim.ts`）；`acceptance/` 归规则核对，引擎不改 |
 | `apps/server/src/index.ts` | Socket.IO 房间服务器 |
-| `apps/server/test/` | 观战、挤登录（继承）、够级房间（`game.test.ts`）、人机接线（`bots.test.ts`，之后归人机阶段） |
+| `apps/server/test/` | 观战、挤登录（继承）、够级房间（`game.test.ts`）、人机接线（`bots.test.ts`） |
 | `apps/web/` | 网页。现在牌桌是**调试牌桌** `src/DebugBoard.tsx`（状态原样显示、每个合法操作一个按钮），正式牌桌由界面阶段做；预览页 `preview.html` + `src/preview.tsx` |
 | `art/`、`apps/web/public/art/` | 美术（归美术阶段，规格表 `art/spec.md`）；牌面复用全站像素扑克牌 `public/cards-pixel/` |
 | `scripts/` | `test-bot.mjs` 陪玩、`spy.mjs` 抓包、`sim-random.ts` 长跑随机对局、`reconnect-check.mjs` 断线重连 |
@@ -114,6 +114,16 @@
 - **人机**：开局时空座自动补人机，叫咕噜一号、二号……（按座位顺序），带「人机」标签（`player.bot`），只有「普通」难度；没有「加人机」按钮。
 - 人机只看自己座位的视图（`redactGameForViewer` 之后），烧牌也一样（候选在 `view.you.burnCandidates`）；人机按烧牌的时刻在 0.4–1.6 秒里随机。
 
+## 人机（普通难度）
+
+只吃自己座位的视图（`redactGameForViewer` 之后）。手牌按点数分组，一组普通牌就是一套，2 和王是配牌：
+- **发牌**：剩下一套就出完；挂大王（大王都见过了就挂小王）的套谁也压不了，够数时连着出、最后一套随便；看得到手牌的队友剩 ≤8 张就喂他能接的小牌；否则出最小、张数多的普通牌组，够级组留着；有对手剩 ≤6 张时出张数比他手牌多的。
+- **接牌**：每种能压的出法算代价（2 算 1、小王 1.8、大王 4，拆组 1.2，拆够级门槛再 +2，用 J 以上的点数小加），代价不超过门槛才压：平时 1，对头够级时 2.6，手牌 ≤10 张 +2、≤5 张再 +1.5，出牌的对手剩 ≤5 张 +2.5，四人乱缠里对面拿了头科二科、要挡第三个人时什么都压；队友的牌不压（一手出完除外）；要过牌时能让牌就让（下家剩 ≤4 张不让）。
+- **烧牌**：基本能烧就烧，挑富余王最多 → 挂大王 → 用配牌最少的 S₁；被烧的是剩 ≤6 张的队友不烧；没有富余王、剩下没大王、大王还有 ≥2 张没见、对头 >10 张时不烧。烧牌状态下先出挂小王的套，点数最小的那组不挂王留到最后。
+- **还贡**：不还 2 和王，不拆够级组，先还孤张小牌。**革命**：能革就革（模拟：革命比不革命每盘多 +3.2 分）。**队内贡**：吃（模拟：全吃比全免每盘多 +0.5 分）。
+- 强度（`npm run sim:bot -- vs 500`，同种子换边，每场 5 盘）：对随机场胜率 100%、盘均分 +11.95；对 greedy-min（最小能压就压、不管队友）场胜率 100%、盘均分 +8.3；混编（普通 ×1 + greedy ×2 对 greedy ×3）盘均分 +2.1。决策平均 0.02ms、最坏约 2ms。
+- 参数在 `BOT_TUNING`，`npm run sim:bot -- tune 500 key=value` 对比默认值。
+
 ## 限时和超时
 
 | 步骤 | 限时 | 超时的默认动作 |
@@ -155,7 +165,8 @@ stepSeconds(state): number                                 // 当前这一步的
 legalCommands(state, playerId): GameCommand[]              // 能发的操作（可以用在视图上）；出牌每种形状一种出法
 redactGameForViewer(state, playerId | ""): GameState       // 某个座位（"" = 观战公开信息）看到的状态，带 you
 spectatorView(state, seeAll): GameState                    // 观战
-botCommand(view, seat) / botBurn(view, seat)               // 人机（占位）
+botCommand(view, seat) / botBurn(view, seat)               // 人机（普通难度）
+botDecision / botBurnDecision / botHint(view, seat)        // 同上，附一句理由（教程「提示」用）
 burnWindowKey(state) / topKey(state) / burnEligibleSeats(state) / timerKey(state)   // 服务器用
 canRespond / canBurn / burnOptions / canRang / nextResponder / isActive / oppOf / teamOf  // 资格判定
 parseSet / beats / setLabel / canBurnTail / burnCandidates / legalBurnLead / leadMoves / beatingMoves  // 核心判定
