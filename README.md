@@ -37,7 +37,7 @@
 | `packages/game/test/` | 规则书 T1–T20（`rulebook.test.ts`）、勘误和正文各节（`rules.test.ts`）、隐藏信息（`redact.test.ts`）、核心判定对拍（`sets.test.ts`）、随机对局（`random.test.ts` + `sim.ts`）；`acceptance/` 归规则核对，引擎不改 |
 | `apps/server/src/index.ts` | Socket.IO 房间服务器 |
 | `apps/server/test/` | 观战、挤登录（继承）、够级房间（`game.test.ts`）、人机接线（`bots.test.ts`） |
-| `apps/web/` | 网页。现在牌桌是**调试牌桌** `src/DebugBoard.tsx`（状态原样显示、每个合法操作一个按钮），正式牌桌由界面阶段做；预览页 `preview.html` + `src/preview.tsx` |
+| `apps/web/` | 网页。牌桌 `src/GameBoard.tsx`（六座围桌、对头在正上方）+ `Hand.tsx`（按点数分列的手牌和按列选牌）+ `table.ts`（按牌桌实测尺寸挑整数倍：手牌 hs、出的牌 ps、头像 as）+ `gouji.css`（`gj-` 牌桌、`gjt-` 顶栏、`gjs-` 右栏、`gjd-` 弹窗、`gjr-` 等候房间）；预览页 `preview.html?s=<场景>`（`&nav=1` 场景列表，`&then=bot,burn,tick` 往下走看特效，`&debug=1` 旧的调试牌桌 `DebugBoard.tsx`） |
 | `art/`、`apps/web/public/art/` | 美术（归美术阶段，规格表 `art/spec.md`）；牌面复用全站像素扑克牌 `public/cards-pixel/` |
 | `scripts/` | `test-bot.mjs` 陪玩、`spy.mjs` 抓包、`sim-random.ts` 长跑随机对局、`reconnect-check.mjs` 断线重连 |
 
