@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { DEFAULT_OPTIONS, SEAT_COUNT, TEAM_NAMES, teamOf, type Card, type GameCommand, type GameOptions, type LobbyRoomSnapshot, type PublicRoomSummary } from "@gouji/game";
-import { art, bgArt, seatColor } from "./art.js";
+import { art, seatColor } from "./art.js";
 import { CardView } from "./cards.js";
 import { useConfirm } from "./confirm.js";
 import GameBoard from "./GameBoard.js";
@@ -269,7 +269,6 @@ function App() {
   if (tutorialOpen && room?.status !== "playing") {
     return (
       <main data-gc-table className="app-shell gj-game tut-on">
-        <GjBackdrop theme={theme} />
         <TutorialMode name={name} brand={<Brand />} themeToggle={themeToggle} theme={theme} waitingRoom={room?.code} onExit={closeTutorial} />
         {confirmDialog}
       </main>
@@ -280,7 +279,6 @@ function App() {
     const watched = room.game.players.some((player) => player.id === watchId) ? watchId : room.game.players[0]!.id;
     return (
       <main data-gc-table className="app-shell gj-game">
-        <GjBackdrop theme={theme} />
         <GameBoard
           room={room}
           busy={busy}
@@ -306,7 +304,6 @@ function App() {
   if (room) {
     return (
       <main className="app-shell dz-room">
-        <GjBackdrop theme={theme} />
         <header className="topbar">
           <Brand />
           <div className="topbar-right">
@@ -343,7 +340,6 @@ function App() {
 
   return (
     <main className="app-shell dz-home">
-      <GjBackdrop theme={theme} />
       <header className="topbar">
         <Brand />
         <div className="topbar-right">
@@ -374,8 +370,10 @@ function App() {
             <li><b>烧牌</b>能一口气出完时抢着压别人的够级牌</li>
             <li><b>进贡</b>大落、二落把王和 2 送给头科、二科</li>
           </ul>
-          <div className="dz-showcase gjh-showcase" aria-hidden="true">
-            {SHOWCASE.map((card, index) => <CardView key={card} card={card} scale={2} style={{ "--i": index } as CSSProperties} />)}
+          <div className="dz-hero" style={{ backgroundImage: `url(${theme === "day" ? art.sceneDay : art.sceneNight})` }}>
+            <div className="dz-showcase" aria-hidden="true">
+              {SHOWCASE.map((card, index) => <CardView key={card} card={card} scale={2} style={{ "--i": index } as CSSProperties} />)}
+            </div>
           </div>
         </div>
 
@@ -675,16 +673,6 @@ function SeatGrid({ room, onKick }: { room: LobbyRoomSnapshot; onKick: (memberId
         </div>
       ))}
       {swapError && <p className="feedback feedback-error" role="alert">{swapError}</p>}
-    </div>
-  );
-}
-
-/** 铺满窗口的海边露台场景：首页、等候房间、牌桌、教程的第一个子元素，面板都叠在它上面（gouji.css「背景」一节）。 */
-function GjBackdrop({ theme }: { theme: "day" | "night" }) {
-  return (
-    <div className="gj-backdrop" aria-hidden="true">
-      <div className="gj-backdrop-art" style={{ backgroundImage: `url(${theme === "day" ? bgArt.day : bgArt.night})` }} />
-      <div className="gj-backdrop-veil" />
     </div>
   );
 }
