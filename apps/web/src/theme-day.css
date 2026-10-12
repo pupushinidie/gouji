@@ -22,7 +22,7 @@
 /* 够级牌桌：白天用白天的海边场景，半透明底改成浅色；桌上的深色小牌子保持夜间的浅色字，
    只有桌上的按钮（白天是浅底）用白天的深色字 */
 :root[data-theme="day"] .gj-table {
-  --veil: rgba(255, 250, 240, 0.28);
+  --veil: rgba(255, 250, 240, 0.12);
   --text: #f6ecd0;
   --muted: #c9bfa4;
   --gold: #f0c050;
@@ -31,3 +31,7 @@
 }
 :root[data-theme="day"] .gj-table :is(.quiet-button, .primary-button) { --text: #1d2433; --muted: #5b6a86; }
 :root[data-theme="day"] .gj-table .gj-burn { color: #2a1c06; }
+
+/* 铺满窗口的场景背景：白天用白天的海边图，底色和薄纱换成浅色 */
+:root[data-theme="day"] .gj-backdrop { background: #dff1f5; }
+:root[data-theme="day"] .gj-backdrop-veil { background: #ffffff; opacity: 0.2; }

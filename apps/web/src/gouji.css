@@ -32,10 +32,11 @@
 .gj-table {
   --text: #f6ecd0;
   --muted: #c9bfa4;
-  --veil: rgba(10, 16, 28, 0.55);
+  --veil: rgba(10, 16, 28, 0.2);
   position: relative; display: grid; grid-template-rows: minmax(0, 1fr) auto auto; gap: 6px; min-height: 0; padding: 8px 16px 6px;
   overflow: hidden; color: var(--text);
-  background: #10304a var(--scene) center / var(--scene-size) no-repeat;
+  /* 场景由铺满窗口的 .gj-backdrop 提供（2026-10-11 起），牌桌本身透明，只叠一层薄薄的暗色 */
+  background: transparent;
   image-rendering: pixelated;
 }
 .gj-table::before { content: ""; position: absolute; inset: 0; background: var(--veil); pointer-events: none; }
@@ -380,4 +381,98 @@
   .dz-home .welcome-copy .tut-invite { margin-top: 8px; margin-bottom: 0; }
   .dz-home .dz-home-points { gap: 2px; margin-top: 8px; }
   .app-shell.dz-home .dz-hero { margin-top: 10px; }
+}
+
+/* ---------- 背景：海边露台铺满窗口（2026-10-11，全站统一做法，照快艇骰子）----------
+ * .gj-backdrop 固定在窗口底下（z-index 0），按 16:9 居中裁切；首页、等候房间、牌桌、教程的其他子元素都压在它上面。
+ * gj- 前缀：白天版不机械换色，白天的底色和 veil 在 theme-day.css 里手调。
+ */
+.gj-backdrop { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: #10304a; }
+.gj-backdrop-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100vw, calc(100vh * 16 / 9));
+  height: max(100vh, calc(100vw * 9 / 16));
+  transform: translate(-50%, -50%);
+  background-size: 100% 100%;
+  image-rendering: pixelated;
+}
+.gj-backdrop-veil { position: absolute; inset: 0; background: #0a101c; opacity: 0.35; }
+.app-shell.dz-home > :not(.gj-backdrop):not(.gm-modal-backdrop), .app-shell.dz-room > :not(.gj-backdrop):not(.gm-modal-backdrop), .app-shell.gj-game > :not(.gj-backdrop):not(.gm-modal-backdrop) { position: relative; z-index: 1; }
+.app-shell.gj-game .gj-screen { position: relative; z-index: 1; }
+
+/* 首页、等候房间：叠在场景上的面板都要不透明（左栏介绍、在线牌桌、房间标题） */
+.app-shell.dz-home .welcome-copy, .app-shell.dz-home .online-rooms, .app-shell.dz-room .room-heading {
+  padding: 16px 20px;
+  background: #16203a;
+  box-shadow: 0 0 0 var(--px) #04060c, inset var(--px) var(--px) 0 0 #3d5482, inset calc(var(--px) * -1) calc(var(--px) * -1) 0 0 #080c17;
+}
+.app-shell.dz-home .online-rooms { border-top: 0; }
+.app-shell.dz-room .room-feedback, .app-shell.dz-room .room-secure-note { background: #16203a; box-shadow: 0 0 0 var(--px) #04060c; }
+.app-shell.dz-home .welcome-copy h1 { margin: 12px 0; }
+/* 首页主图去掉了（背景就是场景），摆出来的一手牌直接放在介绍下面 */
+.app-shell .gjh-showcase { position: static; display: flex; justify-content: center; margin-top: 16px; padding: 12px 0 8px; transform: none; }
+.app-shell .gjh-showcase .dz-card { transform: translateY(calc((var(--i) - 3) * (var(--i) - 3) * 2px)) rotate(calc((var(--i) - 3) * 4deg)); }
+
+/* 首页：一屏放下（介绍 | 进入牌桌 | 在线牌桌），三块直接做 dz-home 的网格项 */
+@media (min-width: 900px) {
+  .app-shell.dz-home {
+    width: min(1440px, calc(100% - 32px));
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px) clamp(280px, 26vw, 400px);
+    grid-template-rows: 56px minmax(0, 1fr);
+    column-gap: 16px;
+  }
+  .app-shell.dz-home > .topbar { grid-column: 1 / -1; height: 56px; }
+  .app-shell.dz-home > .welcome-grid, .app-shell.dz-home .dz-home-side { display: contents; }
+  .app-shell.dz-home .welcome-copy { grid-column: 1; grid-row: 2; align-self: center; max-height: calc(100% - 24px); margin: 12px 0; overflow: hidden; }
+  .app-shell.dz-home .entry-card { grid-column: 2; grid-row: 2; align-self: center; max-height: calc(100% - 24px); margin: 12px 0; overflow-y: auto; }
+  .app-shell.dz-home .online-rooms { grid-column: 3; grid-row: 2; min-height: 0; margin: 12px 0; overflow-y: auto; }
+  .app-shell.dz-home .online-rooms .online-rooms-grid { flex: 0 1 auto; min-height: 56px; }
+  .app-shell.dz-home .welcome-copy h1 { font-size: 72px; }
+}
+@media (min-width: 900px) and (max-width: 1279px) {
+  .app-shell.dz-home .welcome-copy h1 { font-size: 48px; }
+  .app-shell.dz-home .welcome-copy { padding: 12px 16px; }
+  .app-shell.dz-home .gjh-showcase .dz-card + .dz-card { margin-left: -60px; }
+}
+@media (min-width: 900px) and (max-height: 820px) {
+  .app-shell.dz-home .welcome-copy h1 { margin: 8px 0; font-size: 48px; }
+  .app-shell.dz-home .gjh-showcase { margin-top: 8px; padding: 8px 0 4px; }
+}
+@media (min-width: 900px) and (max-height: 720px) {
+  .app-shell.dz-home .welcome-copy h1 { font-size: 36px; }
+  .app-shell.dz-home .welcome-copy .welcome-description { display: none; }
+  .app-shell.dz-home .gjh-showcase { display: none; }
+}
+@media (max-width: 899px) {
+  .app-shell.dz-home .welcome-copy { display: block; order: 1; padding: 12px; }
+  .app-shell.dz-home .welcome-copy h1 { margin: 4px 0 8px; }
+  .app-shell.dz-home .gjh-showcase { order: 3; }
+  .app-shell.dz-home .online-rooms { padding: 12px; }
+  .app-shell.dz-home .gjh-showcase .dz-card + .dz-card { margin-left: -24px; }
+}
+@media (max-width: 899px) and (max-height: 760px) {
+  .app-shell.dz-home .gjh-showcase { display: none; }
+}
+
+/* 等候房间：标题条紧凑一点 */
+@media (min-width: 760px) {
+  .app-shell.dz-room .room-heading { align-items: center; margin-bottom: 12px; padding: 10px 16px; }
+  .app-shell.dz-room .room-heading h1 { margin: 2px 0; font-size: 36px; }
+  .app-shell.dz-room .room-heading p { margin: 2px 0 0; }
+}
+@media (min-width: 760px) and (max-height: 820px) {
+  .app-shell.dz-room .room-heading h1 { margin: 2px 0; font-size: 24px; }
+  .app-shell.dz-room .room-heading p { display: none; }
+}
+@media (max-width: 759px) {
+  .app-shell.dz-room .room-heading { padding: 10px 12px; }
+  .app-shell.dz-room .room-heading h1 { margin: 2px 0; font-size: 24px; }
+  .app-shell.dz-room .room-heading p { display: none; }
 }

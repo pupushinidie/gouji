@@ -3,6 +3,12 @@ const BASE = `${import.meta.env.BASE_URL}art/`;
 
 export type StatusIcon = "gouji" | "shao" | "shao-ok" | "jieshao" | "wutou" | "rang" | "jiefeng" | "geming" | "kanggong" | "luanchan";
 
+/** 铺满窗口的场景背景（和 scene-*.png 同一张图，首页、等候房间、牌桌、教程都用）。 */
+export const bgArt = {
+  night: `${BASE}bg/night.png`,
+  day: `${BASE}bg/day.png`,
+};
+
 export const art = {
   /** 青岛海边露台场景（512×288）：牌桌背景和首页主图。 */
   sceneNight: `${BASE}scene-night.png`,
