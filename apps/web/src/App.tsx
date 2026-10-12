@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { DEFAULT_OPTIONS, SEAT_COUNT, TEAM_NAMES, teamOf, type Card, type GameCommand, type GameOptions, type LobbyRoomSnapshot, type PublicRoomSummary } from "@gouji/game";
-import { art, seatColor } from "./art.js";
+import { art, bgArt, seatColor } from "./art.js";
 import { CardView } from "./cards.js";
 import { useConfirm } from "./confirm.js";
 import GameBoard from "./GameBoard.js";
@@ -14,7 +14,7 @@ import RoomChat from "./RoomChat.js";
 import { roomRole, RoomSettingsPanel, SeatSwitch } from "./RoomExtras.js";
 import { socket } from "./socket.js";
 import { ThemeToggle, useTheme } from "./theme.js";
-import { NO_BGM, SoundToggle, useBgm, useRoomSfx } from "./gm-sound.js";
+import { type BgmTrack, SoundToggle, useBgm, useRoomSfx } from "./gm-sound.js";
 import { errorSound } from "./game-sfx.js";
 import { useVoice } from "./voice.js";
 
@@ -31,6 +31,9 @@ const CENTER_URL = import.meta.env.DEV ? `${window.location.protocol}//${window.
 function normalizeRoomCode(value: string): string {
   return value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, "").slice(0, 6);
 }
+
+// 背景音乐：进了房间（等候房间、对局、观战）和新手教程里放，首页和房间列表不放。gain / start / end 按这首曲子量（见 gm-sound.tsx）。
+const BGM: BgmTrack = { src: `${import.meta.env.BASE_URL}bgm/gouji.mp3`, gain: 0.84, start: 0.0, end: 92.2 };
 
 function App() {
   const [mode, setMode] = useState<EntryMode>("create");
@@ -59,7 +62,7 @@ function App() {
   // 新手教程：首页或等候房间点进来（地址带 ?tutorial 时直接打开，游戏中心可以直接链过来）
   const [tutorialOpen, setTutorialOpen] = useState(() => new URLSearchParams(window.location.search).has("tutorial"));
   // 声音：进了房间（等候房间、对局、观战）和新手教程里顶栏有 ♪ 面板（音效、语音音量）；这款还没有背景音乐。
-  useBgm(room || tutorialOpen ? NO_BGM : null);
+  useBgm(room || tutorialOpen ? BGM : null);
   // 房间里的提示音：有人进出、开局、收到聊天（gm-sound.tsx）
   const lastChat = room?.chat[room.chat.length - 1];
   useRoomSfx(room ? { members: room.members.length + room.spectators.length, playing: room.status === "playing", chatCount: room.chat.length, lastChatMine: lastChat?.senderId === socket.id } : null);
@@ -266,6 +269,7 @@ function App() {
   if (tutorialOpen && room?.status !== "playing") {
     return (
       <main data-gc-table className="app-shell gj-game tut-on">
+        <GjBackdrop theme={theme} />
         <TutorialMode name={name} brand={<Brand />} themeToggle={themeToggle} theme={theme} waitingRoom={room?.code} onExit={closeTutorial} />
         {confirmDialog}
       </main>
@@ -276,6 +280,7 @@ function App() {
     const watched = room.game.players.some((player) => player.id === watchId) ? watchId : room.game.players[0]!.id;
     return (
       <main data-gc-table className="app-shell gj-game">
+        <GjBackdrop theme={theme} />
         <GameBoard
           room={room}
           busy={busy}
@@ -301,6 +306,7 @@ function App() {
   if (room) {
     return (
       <main className="app-shell dz-room">
+        <GjBackdrop theme={theme} />
         <header className="topbar">
           <Brand />
           <div className="topbar-right">
@@ -337,6 +343,7 @@ function App() {
 
   return (
     <main className="app-shell dz-home">
+      <GjBackdrop theme={theme} />
       <header className="topbar">
         <Brand />
         <div className="topbar-right">
@@ -367,10 +374,8 @@ function App() {
             <li><b>烧牌</b>能一口气出完时抢着压别人的够级牌</li>
             <li><b>进贡</b>大落、二落把王和 2 送给头科、二科</li>
           </ul>
-          <div className="dz-hero" style={{ backgroundImage: `url(${theme === "day" ? art.sceneDay : art.sceneNight})` }}>
-            <div className="dz-showcase" aria-hidden="true">
-              {SHOWCASE.map((card, index) => <CardView key={card} card={card} scale={2} style={{ "--i": index } as CSSProperties} />)}
-            </div>
+          <div className="dz-showcase gjh-showcase" aria-hidden="true">
+            {SHOWCASE.map((card, index) => <CardView key={card} card={card} scale={2} style={{ "--i": index } as CSSProperties} />)}
           </div>
         </div>
 
@@ -670,6 +675,16 @@ function SeatGrid({ room, onKick }: { room: LobbyRoomSnapshot; onKick: (memberId
         </div>
       ))}
       {swapError && <p className="feedback feedback-error" role="alert">{swapError}</p>}
+    </div>
+  );
+}
+
+/** 铺满窗口的海边露台场景：首页、等候房间、牌桌、教程的第一个子元素，面板都叠在它上面（gouji.css「背景」一节）。 */
+function GjBackdrop({ theme }: { theme: "day" | "night" }) {
+  return (
+    <div className="gj-backdrop" aria-hidden="true">
+      <div className="gj-backdrop-art" style={{ backgroundImage: `url(${theme === "day" ? bgArt.day : bgArt.night})` }} />
+      <div className="gj-backdrop-veil" />
     </div>
   );
 }
